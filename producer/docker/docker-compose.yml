@@ -1,0 +1,18 @@
+services:
+  go-url-producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: go-url-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ${KAFKA_TOPIC}
+    restart: on-failure
+
+networks:
+  default:
+    external: true
+    name: kafka-net 
