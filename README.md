@@ -21,8 +21,14 @@ make up
 ```
 
 #### Run without docker
+To run the go producer:
 ```
 make run
+```
+
+Kafka is only run via docker. From `kafka/docker`, run:
+```
+make up
 ```
 
 #### Lint

@@ -22,7 +22,3 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-
-networks:
-  default:
-    name: kafka-net

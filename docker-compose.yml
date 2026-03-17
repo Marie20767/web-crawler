@@ -1,0 +1,3 @@
+include:
+  - kafka/docker/docker-compose.yml
+  - producer/docker/docker-compose.yml

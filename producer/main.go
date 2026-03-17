@@ -7,9 +7,12 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	"github.com/marie20767/web-crawler/config"
 	"github.com/segmentio/kafka-go"
+
+	"github.com/marie20767/web-crawler/config"
 )
+
+const kafkaMaxAttempts = 5
 
 var seedUrls = []string{
 	"https://www.bookbrowse.com/read-alikes/",
@@ -41,12 +44,12 @@ func run() error {
 	slog.SetDefault(logger)
 
 	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
-	defer writer.Close()
+	defer writer.Close() //nolint:errcheck
 
 	for _, url := range seedUrls {
 		msgId := uuid.New()
 		msg := kafka.Message{
-			Key:   []byte(fmt.Sprintf("key-%s", msgId)),
+			Key:   fmt.Appendf(nil, "key-%s", msgId),
 			Value: []byte(url),
 		}
 
@@ -68,6 +71,6 @@ func newWriter(broker, topic string) *kafka.Writer {
 		Topic:        topic,
 		Balancer:     &kafka.LeastBytes{},
 		RequiredAcks: kafka.RequireOne,
-		MaxAttempts:  5,
+		MaxAttempts:  kafkaMaxAttempts,
 	}
 }
