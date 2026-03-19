@@ -1,6 +1,6 @@
 GIT_HASH := $(shell git rev-parse --short HEAD)
 DOCKER_USER := marie20767
-IMAGE_NAME := go-url-producer
+IMAGE_NAME := url-initialiser
 
 dep:
 	go mod download
@@ -23,7 +23,7 @@ build:
 	CGO_ENABLED=0 \
 	GOOS=linux \
 	GOARCH=amd64 \
-	go build -o go-url-producer .
+	go build -o url-initialiser .
 
 docker/local-build:
 	DOCKER_BUILDKIT=1 docker buildx build \

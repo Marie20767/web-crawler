@@ -26,9 +26,9 @@ jobs:
       - name: Build with Makefile + cache
         env:
           DOCKER_USER: marie207
-          IMAGE_NAME: go-url-producer
+          IMAGE_NAME: url-initialiser
           GIT_HASH: ${{ github.sha }}
           CACHE_FROM: --cache-from=type=local,src=/tmp/.buildx-cache
           CACHE_TO: --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
-        working-directory: producer
+        working-directory: initialiser
         run: make docker/ci-build

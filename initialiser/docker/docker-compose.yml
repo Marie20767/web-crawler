@@ -1,9 +1,9 @@
 services:
-  go-url-producer:
+  url-initialiser:
     build:
       context: ../ 
       dockerfile: docker/Dockerfile
-    container_name: go-url-producer
+    container_name: url-initialiser
     depends_on:
       kafka:
         condition: service_healthy

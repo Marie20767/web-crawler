@@ -7,9 +7,6 @@ Implementation of a distributed web crawler using Golang and Kafka
 
 ### Development
 
-#### Prerequisite files:
-- `.env`
-
 #### Setup
 ```
 make setup
@@ -21,7 +18,7 @@ make up
 ```
 
 #### Run without docker
-To run the go producer:
+To run the url initialiser:
 ```
 make run
 ```

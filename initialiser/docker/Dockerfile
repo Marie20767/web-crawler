@@ -17,13 +17,13 @@ RUN make build
 # =========================
 FROM alpine:3.22
 
-RUN addgroup -g 1000 -S producer && adduser -u 1000 -S producer -G producer
+RUN addgroup -g 1000 -S initialiser && adduser -u 1000 -S initialiser -G initialiser
 
-RUN mkdir /app && chown producer:producer /app
+RUN mkdir /app && chown initialiser:initialiser /app
 WORKDIR /app
 
-COPY --from=builder /app/go-url-producer /app/go-url-producer
+COPY --from=builder /app/url-initialiser /app/url-initialiser
 
-USER producer
+USER initialiser
 
-ENTRYPOINT ["/app/go-url-producer"]
+ENTRYPOINT ["/app/url-initialiser"]
