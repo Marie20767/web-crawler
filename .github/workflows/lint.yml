@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: producer
 
     steps:
       - name: Checkout repository
@@ -27,3 +24,4 @@ jobs:
         with:
           version: v2.5.0
           args: --timeout 5m
+          working-directory: producer
