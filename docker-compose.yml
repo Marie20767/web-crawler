@@ -1,3 +1,4 @@
 include:
   - kafka/docker/docker-compose.yml
   - initialiser/docker/docker-compose.yml
+  - crawler/docker/docker-compose.yml

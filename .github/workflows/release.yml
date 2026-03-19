@@ -6,11 +6,17 @@ on:
       - master
 
 jobs:
-  build:
+  release:
+    name: Release ${{ matrix.service }}
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [initialiser, crawler]
+
     defaults:
       run:
-        working-directory: initialiser
+        working-directory: ${{ matrix.service }}
 
     steps:
       - name: Checkout repository
@@ -19,7 +25,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ matrix.service }}/go.mod'
           cache: true
 
       - name: Set up Docker Buildx

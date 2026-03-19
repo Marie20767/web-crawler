@@ -7,18 +7,13 @@ Implementation of a distributed web crawler using Golang and Kafka
 
 ### Development
 
-#### Setup
-```
-make setup
-```
-
 #### Run with docker
 ```
 make up
 ```
 
 #### Run without docker
-To run the url initialiser:
+To run the initialiser/crawler, cd into the correct folder (i.e. `initialiser`/`crawler`) and run:
 ```
 make run
 ```
@@ -29,11 +24,12 @@ make up
 ```
 
 #### Lint
+To lint the initialiser/crawler, cd into the correct folder (i.e. `initialiser`/`crawler`) and run:
 ```
 make lint
 ```
 
-and
+or
 
 ```
 make lint/fix

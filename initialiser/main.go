@@ -22,11 +22,11 @@ var seedUrls = []string{
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("run failed", slog.Any("error", err))
+		slog.Error("initialiser run failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	slog.Info("shutting down...")
+	slog.Info("shutting down initialiser...")
 }
 
 func run() error {

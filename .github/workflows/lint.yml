@@ -6,8 +6,13 @@ on:
       - master
 
 jobs:
-  build:
+  lint:
+    name: Lint ${{ matrix.service }}
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [initialiser, crawler]
 
     steps:
       - name: Checkout repository
@@ -16,7 +21,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: 'initialiser/go.mod'
+          go-version-file: '${{ matrix.service }}/go.mod'
           cache: true
 
       - name: Run linter
@@ -24,4 +29,4 @@ jobs:
         with:
           version: v2.5.0
           args: --timeout 5m
-          working-directory: initialiser
+          working-directory: ${{ matrix.service }}

@@ -7,7 +7,16 @@ on:
 
 jobs:
   build:
+    name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - service: initialiser
+            image_name: url-initialiser
+          - service: crawler
+            image_name: url-crawler
 
     steps:
       - uses: actions/checkout@v4
@@ -26,9 +35,9 @@ jobs:
       - name: Build with Makefile + cache
         env:
           DOCKER_USER: marie207
-          IMAGE_NAME: url-initialiser
+          IMAGE_NAME: ${{ matrix.image_name }}
           GIT_HASH: ${{ github.sha }}
           CACHE_FROM: --cache-from=type=local,src=/tmp/.buildx-cache
           CACHE_TO: --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
-        working-directory: initialiser
+        working-directory: ${{ matrix.service }}
         run: make docker/ci-build
