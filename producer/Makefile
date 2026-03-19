@@ -39,7 +39,8 @@ docker/ci-build:
 	$(CACHE_TO) \
 	--platform linux/amd64 \
 	-t $(DOCKER_USER)/$(IMAGE_NAME):latest \
-	-t $(DOCKER_USER)/$(IMAGE_NAME):$(GIT_HASH) .
+	-t $(DOCKER_USER)/$(IMAGE_NAME):$(GIT_HASH) \
+	.
 
 docker/push:
 	docker push --all-tags $(DOCKER_USER)/$(IMAGE_NAME)
