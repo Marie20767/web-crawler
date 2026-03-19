@@ -17,8 +17,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      # wait for url topic creation
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic url --partitions 1 --replication-factor 1 --if-not-exists"]
       interval: 10s
       timeout: 10s
       retries: 10
-      start_period: 30s
+      start_period: 60s
