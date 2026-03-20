@@ -1,6 +1,8 @@
 GIT_HASH := $(shell git rev-parse --short HEAD)
 DOCKER_USER := marie20767
 IMAGE_NAME := url-initialiser
+ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PROJECT_ROOT := $(abspath $(ROOT_DIR)..)/
 
 dep:
 	go mod download
@@ -14,10 +16,10 @@ lint/install:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v2.5.0
 
 lint/run:
-	bin/golangci-lint run --config .golangci.yml
+	bin/golangci-lint run --config $(PROJECT_ROOT).golangci.yml
 
 lint/fix:
-	bin/golangci-lint run --config .golangci.yml --fix
+	bin/golangci-lint run --config $(PROJECT_ROOT).golangci.yml --fix
 
 build:
 	CGO_ENABLED=0 \
