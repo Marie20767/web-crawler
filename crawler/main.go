@@ -1,4 +1,4 @@
-package crawler
+package main
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -16,7 +17,11 @@ import (
 	"github.com/marie20767/web-crawler/config"
 )
 
-const kafkaTimeout = 5 * time.Second
+const (
+	kafkaTimeout      = 5 * time.Second
+	kafkaMinBatchSize = 10e3 // 10KB
+	kafkaMaxBatchSize = 10e6 // 10MB
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -44,37 +49,25 @@ func run() error {
 	reader := newReader(cfg.Kafka.Broker, cfg.Kafka.Topic)
 	defer reader.Close() //nolint:errcheck
 
+	client := &http.Client{}
+
 	for {
-		ctx, cancel := context.WithTimeout(ctx, kafkaTimeout)
-		msg, err := reader.ReadMessage(ctx)
+		readCtx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+		msg, err := reader.ReadMessage(readCtx)
 		cancel()
 
 		if errors.Is(err, context.DeadlineExceeded) {
 			break
 		}
+
 		if err != nil {
 			slog.Error("error consuming from topic", slog.Any("error", err))
 			return err
 		}
 
-		var url string
-		if err := json.Unmarshal(msg.Value, &url); err != nil {
-			slog.Error("failed to unmarshal url", slog.Any("error", err))
+		if err := processMessage(ctx, client, msg.Value); err != nil {
 			continue
 		}
-
-		resp, err := http.Get(url)
-		if err != nil {
-			slog.Error("failed to fetch web page", slog.Any("error", err))
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			slog.Error("failed to parse response body", slog.Any("error", err))
-		}
-
-		fmt.Println(">>> body: ", string(body))
 	}
 
 	slog.Info("consuming from topic complete")
@@ -88,7 +81,44 @@ func newReader(broker, topic string) *kafka.Reader {
 		Topic:   topic,
 
 		GroupID:  "crawler",
-		MinBytes: 10e3, // 10KB
-		MaxBytes: 10e6, // 10MB
+		MinBytes: kafkaMinBatchSize,
+		MaxBytes: kafkaMaxBatchSize,
 	})
+}
+
+func processMessage(ctx context.Context, client *http.Client, raw []byte) error {
+	var seedUrl string
+	if err := json.Unmarshal(raw, &seedUrl); err != nil {
+		slog.Error("failed to unmarshal url", slog.Any("error", err))
+		return err
+	}
+
+	parsedUrl, err := url.Parse(seedUrl)
+	if err != nil {
+		slog.Error("failed to parse url", slog.Any("error", err))
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedUrl.String(), http.NoBody)
+	if err != nil {
+		slog.Error("failed to create request", slog.Any("error", err))
+		return err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		slog.Error("failed to make request", slog.Any("error", err))
+		return err
+	}
+	defer res.Body.Close() //nolint:errcheck
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		slog.Error("failed to read response body", slog.Any("error", err))
+		return err
+	}
+
+	fmt.Println(">>> body:", string(body))
+
+	return nil
 }
