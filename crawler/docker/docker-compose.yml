@@ -1,5 +1,5 @@
 services:
-  url-initialiser:
+  url-crawler:
     build:
       context: ../ 
       dockerfile: docker/Dockerfile
