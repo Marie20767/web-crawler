@@ -55,12 +55,14 @@ func run() error {
 
 		err := writer.WriteMessages(ctx, msg)
 		if err != nil {
-			slog.Error("Failed to write message", slog.Any("error", err))
+			slog.Error("failed to write message", slog.Any("error", err))
 			continue
 		}
 
-		slog.Info("Produced message", slog.String("id", msgId.String()), slog.String("url", url))
+		slog.Info("produced message", slog.String("id", msgId.String()), slog.String("url", url))
 	}
+
+	slog.Info("producing to topic complete")
 
 	return nil
 }
