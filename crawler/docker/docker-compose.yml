@@ -1,0 +1,15 @@
+services:
+  url-crawler:
+    build:
+      context: ../ 
+      dockerfile: docker/Dockerfile
+    container_name: url-crawler
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      .env.docker
+    environment:
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: url
+    restart: on-failure

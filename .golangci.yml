@@ -1,0 +1,58 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - dogsled
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - lll
+    - misspell
+    - mnd
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    funlen:
+      lines: -1 # Disable line number checker, just check number of statements
+      statements: 50
+    gocritic:
+      disabled-checks:
+        - whyNoLint
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+    lll:
+      line-length: 140
+    misspell:
+      locale: UK
+    nolintlint:
+      allow-unused: false # report any unused nolint directives
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/marie20767/web-crawler)
+
