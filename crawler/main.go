@@ -109,10 +109,8 @@ func processMessage(ctx context.Context, client *http.Client, raw []byte) error 
 	return err
 }
 
-func fetchWithLimit(ctx context.Context, client *http.Client, url string) ([]byte, bool, error) {
-	skipped := false
-
-	hReq, hErr := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+func fetchWithLimit(ctx context.Context, client *http.Client, seedUrl string) (data []byte, skipped bool, err error) {
+	hReq, hErr := http.NewRequestWithContext(ctx, "HEAD", seedUrl, http.NoBody)
 	if hErr != nil {
 		slog.Error("failed to create HEAD request", slog.Any("error", hErr))
 		return nil, skipped, fmt.Errorf("failed to create HEAD request %v", hErr)
@@ -123,7 +121,7 @@ func fetchWithLimit(ctx context.Context, client *http.Client, url string) ([]byt
 		slog.Error("failed to make HEAD request", slog.Any("error", err))
 		return nil, skipped, fmt.Errorf("failed to make HEAD request %v", err)
 	}
-	res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
 	if cl := res.Header.Get("Content-Length"); cl != "" {
 		size, err := strconv.ParseInt(cl, 10, 64)
@@ -139,7 +137,7 @@ func fetchWithLimit(ctx context.Context, client *http.Client, url string) ([]byt
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedUrl, http.NoBody)
 	if err != nil {
 		slog.Error("failed to create web page request", slog.Any("error", err))
 		return nil, skipped, fmt.Errorf("failed to create web page request %v", err)
@@ -149,9 +147,9 @@ func fetchWithLimit(ctx context.Context, client *http.Client, url string) ([]byt
 		slog.Error("failed to make web page request", slog.Any("error", err))
 		return nil, skipped, fmt.Errorf("failed to make web page request %v", err)
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck
 
-	data, err := io.ReadAll(res.Body)
+	data, err = io.ReadAll(res.Body)
 	if err != nil {
 		slog.Error("failed to read response", slog.Any("error", err))
 		return nil, skipped, fmt.Errorf("failed to read response: %v", err)
