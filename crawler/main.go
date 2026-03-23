@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -19,8 +20,9 @@ import (
 
 const (
 	kafkaTimeout      = 5 * time.Second
-	kafkaMinBatchSize = 10e3 // 10KB
-	kafkaMaxBatchSize = 10e6 // 10MB
+	kafkaMinBatchSize = 10e3            // 10KB
+	kafkaMaxBatchSize = 10e6            // 10MB
+	maxContentSize    = 2 * 1024 * 1024 // 2 MB
 )
 
 func main() {
@@ -99,26 +101,61 @@ func processMessage(ctx context.Context, client *http.Client, raw []byte) error 
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedUrl.String(), http.NoBody)
-	if err != nil {
-		slog.Error("failed to create request", slog.Any("error", err))
-		return err
+	res, ok, err := fetchWithLimit(ctx, client, parsedUrl.String())
+	if ok {
+		fmt.Println(">>> res:", string(res))
 	}
 
-	res, err := client.Do(req)
-	if err != nil {
-		slog.Error("failed to make request", slog.Any("error", err))
-		return err
+	return err
+}
+
+func fetchWithLimit(ctx context.Context, client *http.Client, url string) ([]byte, bool, error) {
+	skipped := false
+
+	hReq, hErr := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+	if hErr != nil {
+		slog.Error("failed to create HEAD request", slog.Any("error", hErr))
+		return nil, skipped, fmt.Errorf("failed to create HEAD request %v", hErr)
 	}
-	defer res.Body.Close() //nolint:errcheck
 
-	body, err := io.ReadAll(res.Body)
+	res, err := client.Do(hReq)
 	if err != nil {
-		slog.Error("failed to read response body", slog.Any("error", err))
-		return err
+		slog.Error("failed to make HEAD request", slog.Any("error", err))
+		return nil, skipped, fmt.Errorf("failed to make HEAD request %v", err)
+	}
+	res.Body.Close()
+
+	if cl := res.Header.Get("Content-Length"); cl != "" {
+		size, err := strconv.ParseInt(cl, 10, 64)
+		if err != nil {
+			slog.Error("failed to parse content length", slog.Any("error", err))
+			return nil, skipped, fmt.Errorf("failed to parse content length %v", err)
+		}
+
+		if size > maxContentSize {
+			skipped = true
+			slog.Info("skipped large web page request", slog.Int64("content-length", size))
+			return nil, skipped, nil
+		}
 	}
 
-	fmt.Println(">>> body:", string(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		slog.Error("failed to create web page request", slog.Any("error", err))
+		return nil, skipped, fmt.Errorf("failed to create web page request %v", err)
+	}
+	res, err = client.Do(req)
+	if err != nil {
+		slog.Error("failed to make web page request", slog.Any("error", err))
+		return nil, skipped, fmt.Errorf("failed to make web page request %v", err)
+	}
+	defer res.Body.Close()
 
-	return nil
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		slog.Error("failed to read response", slog.Any("error", err))
+		return nil, skipped, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	return data, skipped, nil
 }
