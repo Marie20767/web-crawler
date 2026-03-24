@@ -2,3 +2,9 @@
 .env.docker
 bin/
 .idea
+
+# Terraform files
+.terraform/
+*.tfplan
+*.tfstate
+*.tfstate.*

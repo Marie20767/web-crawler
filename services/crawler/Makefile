@@ -8,6 +8,7 @@ dep:
 	go mod download
 
 run:
+	aws sso login --profile terraform
 	go run main.go
 
 lint: lint/install lint/run

@@ -21,7 +21,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: '${{ matrix.service }}/go.mod'
+          go-version-file: 'services/${{ matrix.service }}/go.mod'
           cache: true
 
       - name: Run linter
@@ -29,4 +29,4 @@ jobs:
         with:
           version: v2.5.0
           args: --timeout 5m
-          working-directory: ${{ matrix.service }}
+          working-directory: services/${{ matrix.service }}

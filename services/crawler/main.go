@@ -64,7 +64,7 @@ func run() error {
 		cancel()
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			slog.Info("no messages available, waiting to poll again", slog.Duration("interval", kafkaPollInterval))
+			slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
 			select {
 			case <-ctx.Done():
 				slog.Info("context cancelled")
@@ -85,8 +85,8 @@ func run() error {
 		}
 
 		slog.Info("processing message", slog.String("id", string(msg.Key)))
-
 		if err := processMessage(ctx, client, msg.Value); err != nil {
+			slog.Error("failed to process message", slog.Any("error", err))
 			continue
 		}
 	}
@@ -106,16 +106,15 @@ func newReader(broker, topic string) *kafka.Reader {
 func processMessage(ctx context.Context, client *http.Client, raw []byte) error {
 	parsedUrl, err := url.Parse(string(raw))
 	if err != nil {
-		slog.Error("failed to parse url", slog.Any("error", err))
-		return err
+		return fmt.Errorf("failed to parse url %v", err)
 	}
 
 	httpCtx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 
-	res, ok, err := fetchWithLimit(httpCtx, client, parsedUrl.String())
-	if ok {
-		fmt.Println(">>> res:", string(res))
+	res, skipped, err := fetchWithLimit(httpCtx, client, parsedUrl.String())
+	if !skipped {
+		slog.Info("web page res", slog.String("res", string(res)))
 	}
 
 	return err
@@ -137,6 +136,7 @@ func fetchWithLimit(ctx context.Context, client *http.Client, seedUrl string) (d
 
 	limited := io.LimitReader(res.Body, maxContentSize+1)
 	data, err = io.ReadAll(limited)
+
 	if err != nil {
 		slog.Error("failed to read response", slog.Any("error", err))
 		return nil, false, fmt.Errorf("failed to read response: %v", err)
