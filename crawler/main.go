@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -19,10 +19,14 @@ import (
 )
 
 const (
-	kafkaTimeout      = 5 * time.Second
-	kafkaMinBatchSize = 10e3            // 10KB
-	kafkaMaxBatchSize = 10e6            // 10MB
-	maxContentSize    = 2 * 1024 * 1024 // 2 MB
+	kafkaTimeout      = 10 * time.Second
+	kafkaPollInterval = 30 * time.Second
+	kafkaMinBatchSize = 10e3 // 10KB
+	kafkaMaxBatchSize = 10e6 // 10MB
+
+	maxContentSize = 2 * 1024 * 1024 // 2 MB
+
+	httpTimeout = 30 * time.Second
 )
 
 func main() {
@@ -31,11 +35,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("shutting down crawler...")
+	slog.Info("shutting down crawler gracefully...")
 }
 
 func run() error {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
@@ -59,7 +64,19 @@ func run() error {
 		cancel()
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			break
+			slog.Info("no messages available, waiting to poll again", slog.Duration("interval", kafkaPollInterval))
+			select {
+			case <-ctx.Done():
+				slog.Info("context cancelled")
+				return nil
+			case <-time.After(kafkaPollInterval):
+				continue
+			}
+		}
+
+		if errors.Is(err, context.Canceled) {
+			slog.Info("context cancelled")
+			return nil
 		}
 
 		if err != nil {
@@ -67,14 +84,12 @@ func run() error {
 			return err
 		}
 
+		slog.Info("processing message", slog.String("id", string(msg.Key)))
+
 		if err := processMessage(ctx, client, msg.Value); err != nil {
 			continue
 		}
 	}
-
-	slog.Info("consuming from topic complete")
-
-	return nil
 }
 
 func newReader(broker, topic string) *kafka.Reader {
@@ -89,19 +104,16 @@ func newReader(broker, topic string) *kafka.Reader {
 }
 
 func processMessage(ctx context.Context, client *http.Client, raw []byte) error {
-	var seedUrl string
-	if err := json.Unmarshal(raw, &seedUrl); err != nil {
-		slog.Error("failed to unmarshal url", slog.Any("error", err))
-		return err
-	}
-
-	parsedUrl, err := url.Parse(seedUrl)
+	parsedUrl, err := url.Parse(string(raw))
 	if err != nil {
 		slog.Error("failed to parse url", slog.Any("error", err))
 		return err
 	}
 
-	res, ok, err := fetchWithLimit(ctx, client, parsedUrl.String())
+	httpCtx, cancel := context.WithTimeout(ctx, httpTimeout)
+	defer cancel()
+
+	res, ok, err := fetchWithLimit(httpCtx, client, parsedUrl.String())
 	if ok {
 		fmt.Println(">>> res:", string(res))
 	}
@@ -110,50 +122,30 @@ func processMessage(ctx context.Context, client *http.Client, raw []byte) error 
 }
 
 func fetchWithLimit(ctx context.Context, client *http.Client, seedUrl string) (data []byte, skipped bool, err error) {
-	hReq, hErr := http.NewRequestWithContext(ctx, "HEAD", seedUrl, http.NoBody)
-	if hErr != nil {
-		slog.Error("failed to create HEAD request", slog.Any("error", hErr))
-		return nil, skipped, fmt.Errorf("failed to create HEAD request %v", hErr)
-	}
-
-	res, err := client.Do(hReq)
-	if err != nil {
-		slog.Error("failed to make HEAD request", slog.Any("error", err))
-		return nil, skipped, fmt.Errorf("failed to make HEAD request %v", err)
-	}
-	defer res.Body.Close() //nolint:errcheck
-
-	if cl := res.Header.Get("Content-Length"); cl != "" {
-		size, err := strconv.ParseInt(cl, 10, 64)
-		if err != nil {
-			slog.Error("failed to parse content length", slog.Any("error", err))
-			return nil, skipped, fmt.Errorf("failed to parse content length %v", err)
-		}
-
-		if size > maxContentSize {
-			skipped = true
-			slog.Info("skipped large web page request", slog.Int64("content-length", size))
-			return nil, skipped, nil
-		}
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedUrl, http.NoBody)
 	if err != nil {
 		slog.Error("failed to create web page request", slog.Any("error", err))
-		return nil, skipped, fmt.Errorf("failed to create web page request %v", err)
+		return nil, false, fmt.Errorf("failed to create web page request %v", err)
 	}
-	res, err = client.Do(req)
+
+	res, err := client.Do(req)
 	if err != nil {
 		slog.Error("failed to make web page request", slog.Any("error", err))
-		return nil, skipped, fmt.Errorf("failed to make web page request %v", err)
+		return nil, false, fmt.Errorf("failed to make web page request %v", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
 
-	data, err = io.ReadAll(res.Body)
+	limited := io.LimitReader(res.Body, maxContentSize+1)
+	data, err = io.ReadAll(limited)
 	if err != nil {
 		slog.Error("failed to read response", slog.Any("error", err))
-		return nil, skipped, fmt.Errorf("failed to read response: %v", err)
+		return nil, false, fmt.Errorf("failed to read response: %v", err)
 	}
 
-	return data, skipped, nil
+	if int64(len(data)) > maxContentSize {
+		slog.Info("skipped large web page request", slog.Int64("content-length", int64(len(data))))
+		return nil, true, nil
+	}
+
+	return data, false, nil
 }
