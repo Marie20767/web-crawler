@@ -1,8 +1,7 @@
 GIT_HASH := $(shell git rev-parse --short HEAD)
 DOCKER_USER := marie20767
 IMAGE_NAME := url-crawler
-ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-PROJECT_ROOT := $(abspath $(ROOT_DIR)..)/
+PROJECT_ROOT := $(shell git rev-parse --show-toplevel)/
 
 dep:
 	go mod download
