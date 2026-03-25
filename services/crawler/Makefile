@@ -8,6 +8,7 @@ dep:
 
 run:
 	aws sso login --profile terraform
+	AWS_PROFILE=terraform 
 	go run main.go
 
 lint: lint/install lint/run
