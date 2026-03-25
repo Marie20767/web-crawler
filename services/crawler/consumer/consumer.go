@@ -12,7 +12,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
-	"github.com/marie20767/web-crawler/config"
+	"github.com/marie20767/web-crawler/objectstorage"
 )
 
 const (
@@ -27,26 +27,33 @@ const (
 )
 
 type Consumer struct {
-	httpClient *http.Client
-	reader     *kafka.Reader
-	ctx        context.Context
+	httpClient  *http.Client
+	reader      *kafka.Reader
+	ctx         context.Context
+	objectStore *objectstorage.Store
 }
 
-func New(ctx context.Context, cfg *config.Kafka) *Consumer {
+func New(ctx context.Context, broker, topic, bucketName, prefix string) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{cfg.Broker},
-		Topic:   cfg.Topic,
+		Brokers: []string{broker},
+		Topic:   topic,
 
 		GroupID:  "crawler",
 		MinBytes: kafkaMinBatchSize,
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	return &Consumer{
-		reader:     reader,
-		httpClient: &http.Client{},
-		ctx:        ctx,
+	objectStore, err := objectstorage.New(ctx, bucketName, prefix)
+	if err != nil {
+		return nil, err
 	}
+
+	return &Consumer{
+		reader:      reader,
+		httpClient:  &http.Client{},
+		ctx:         ctx,
+		objectStore: objectStore,
+	}, nil
 }
 
 func (c *Consumer) Consume() error {
@@ -71,46 +78,47 @@ func (c *Consumer) Consume() error {
 		}
 
 		if err != nil {
-			slog.Error("error consuming from topic", slog.Any("error", err))
+			slog.Error("consume from topic", slog.Any("error", err))
 			return err
 		}
 
 		slog.Info("processing message", slog.String("id", string(msg.Key)))
-		if err := c.processMessage(msg.Value); err != nil {
-			slog.Error("failed to process message", slog.Any("error", err))
+		if err := c.processMessage(msg); err != nil {
+			slog.Error("process message", slog.Any("error", err))
 			continue
 		}
 	}
 }
 
-func (c *Consumer) processMessage(raw []byte) error {
-	parsedUrl, err := url.Parse(string(raw))
+func (c *Consumer) processMessage(msg kafka.Message) error {
+	parsedURL, err := url.Parse(string(msg.Value))
 	if err != nil {
-		return fmt.Errorf("failed to parse url %v", err)
+		return fmt.Errorf("parse URL %w", err)
 	}
 
 	httpCtx, cancel := context.WithTimeout(c.ctx, httpTimeout)
 	defer cancel()
 
-	res, skipped, err := c.fetchWithLimit(httpCtx, parsedUrl.String())
+	url := parsedURL.String()
+	res, skipped, err := c.fetchWithLimit(httpCtx, url)
 	if !skipped {
-		slog.Info("web page res", slog.String("res", string(res)))
+		return c.objectStore.StoreHTML(string(msg.Key), res)
 	}
 
 	return err
 }
 
-func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedUrl string) (data []byte, skipped bool, err error) {
-	req, err := http.NewRequestWithContext(httpCtx, http.MethodGet, seedUrl, http.NoBody)
+func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
+	req, err := http.NewRequestWithContext(httpCtx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
-		slog.Error("failed to create web page request", slog.Any("error", err))
-		return nil, false, fmt.Errorf("failed to create web page request %v", err)
+		slog.Error("create web page request", slog.Any("error", err))
+		return nil, false, fmt.Errorf("create web page request %w", err)
 	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.Error("failed to make web page request", slog.Any("error", err))
-		return nil, false, fmt.Errorf("failed to make web page request %v", err)
+		slog.Error("make web page request", slog.Any("error", err))
+		return nil, false, fmt.Errorf("make web page request %w", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
 
@@ -118,8 +126,8 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedUrl string) (data
 	data, err = io.ReadAll(limited)
 
 	if err != nil {
-		slog.Error("failed to read response", slog.Any("error", err))
-		return nil, false, fmt.Errorf("failed to read response: %v", err)
+		slog.Error("read response", slog.Any("error", err))
+		return nil, false, fmt.Errorf("read response: %w", err)
 	}
 
 	if int64(len(data)) > maxContentSize {
@@ -132,6 +140,6 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedUrl string) (data
 
 func (c *Consumer) Close() {
 	if err := c.reader.Close(); err != nil {
-		slog.Error("failed to close consumer", slog.Any("error", err))
+		slog.Error("close consumer", slog.Any("error", err))
 	}
 }

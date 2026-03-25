@@ -14,7 +14,7 @@ import (
 
 const kafkaMaxAttempts = 5
 
-var seedUrls = []string{
+var seedURLs = []string{
 	"https://www.bookbrowse.com/read-alikes/",
 	"https://www.goodreads.com/list/tag/read-alikes",
 	"https://www.whatshouldireadnext.com/",
@@ -22,7 +22,7 @@ var seedUrls = []string{
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("initialiser run failed", slog.Any("error", err))
+		slog.Error("initialiser run", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -34,8 +34,8 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("failed to parse env vars", slog.Any("error", err))
-		return fmt.Errorf("failed to parse env vars: %v", err)
+		slog.Error("parse env vars", slog.Any("error", err))
+		return fmt.Errorf("parse env vars: %w", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -46,7 +46,7 @@ func run() error {
 	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
 	defer writer.Close() //nolint:errcheck
 
-	for _, url := range seedUrls {
+	for _, url := range seedURLs {
 		msgId := uuid.New()
 		msg := kafka.Message{
 			Key:   fmt.Appendf(nil, "key-%s", msgId),
@@ -55,7 +55,7 @@ func run() error {
 
 		err := writer.WriteMessages(ctx, msg)
 		if err != nil {
-			slog.Error("failed to write message", slog.Any("error", err))
+			slog.Error("write message", slog.Any("error", err))
 			continue
 		}
 

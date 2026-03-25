@@ -47,7 +47,8 @@ type Kafka struct {
 }
 
 type AWS struct {
-	bucketName string
+	ObjectStorePrefix string
+	BucketName        string
 }
 
 func ParseEnv() (*App, error) {
@@ -56,12 +57,13 @@ func ParseEnv() (*App, error) {
 	_ = godotenv.Load()
 
 	envVars := map[string]string{
-		"SERVER_PORT":  "",
-		"LOG_LEVEL":    "",
-		"ENVIRONMENT":  "",
-		"KAFKA_BROKER": "",
-		"KAFKA_TOPIC":  "",
-		"BUCKET_NAME":  "",
+		"SERVER_PORT":         "",
+		"LOG_LEVEL":           "",
+		"ENVIRONMENT":         "",
+		"KAFKA_BROKER":        "",
+		"KAFKA_TOPIC":         "",
+		"BUCKET_NAME":         "",
+		"OBJECT_STORE_PREFIX": "",
 	}
 
 	for key := range envVars {
@@ -91,7 +93,8 @@ func ParseEnv() (*App, error) {
 			Topic:  envVars["KAFKA_TOPIC"],
 		},
 		AWS: &AWS{
-			bucketName: envVars["BUCKET_NAME"],
+			BucketName:        envVars["BUCKET_NAME"],
+			ObjectStorePrefix: envVars["OBJECT_STORE_PREFIX"],
 		},
 	}, nil
 }

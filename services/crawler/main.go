@@ -14,7 +14,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("crawler run failed", slog.Any("error", err))
+		slog.Error("crawler run", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -27,8 +27,8 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("failed to parse env vars", slog.Any("error", err))
-		return fmt.Errorf("failed to parse env vars: %v", err)
+		slog.Error("parse env vars", slog.Any("error", err))
+		return fmt.Errorf("parse env vars: %w", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -36,7 +36,10 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	reader := consumer.New(ctx, cfg.Kafka)
+	reader, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
+	if err != nil {
+		return err
+	}
 	defer reader.Close()
 
 	err = reader.Consume()
