@@ -38,7 +38,7 @@ func run() error {
 
 	reader := consumer.New(ctx, cfg.Kafka)
 	defer reader.Close()
-	
+
 	err = reader.Consume()
 	return err
 }

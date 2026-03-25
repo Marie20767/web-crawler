@@ -10,8 +10,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/marie20767/web-crawler/config"
 	"github.com/segmentio/kafka-go"
+
+	"github.com/marie20767/web-crawler/config"
 )
 
 const (
@@ -130,5 +131,7 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedUrl string) (data
 }
 
 func (c *Consumer) Close() {
-	c.reader.Close()
+	if err := c.reader.Close(); err != nil {
+		slog.Error("failed to close consumer", slog.Any("error", err))
+	}
 }
