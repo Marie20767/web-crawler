@@ -39,5 +39,5 @@ jobs:
           GIT_HASH: ${{ github.sha }}
           CACHE_FROM: --cache-from=type=local,src=/tmp/.buildx-cache
           CACHE_TO: --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
-        working-directory: ${{ matrix.service }}
+        working-directory: services/${{ matrix.service }}
         run: make docker/ci-build

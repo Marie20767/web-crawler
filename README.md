@@ -1,6 +1,9 @@
 ## Distributed Web Crawler
 
-Implementation of a distributed web crawler using Golang and Kafka
+Implementation of a distributed web crawler using:
+ - Kafka
+ - Golang
+ - Terraform
 
 ### App architecture
 ![high-level system architecture](apparchitecture.png)
@@ -13,7 +16,7 @@ make up
 ```
 
 #### Run without docker
-To run the initialiser/crawler, cd into the correct folder (i.e. `initialiser`/`crawler`) and run:
+To run the initialiser|crawler, cd into the correct folder (i.e. `services/initialiser`|`crawler`) and run:
 ```
 make run
 ```
@@ -24,7 +27,7 @@ make up
 ```
 
 #### Lint
-To lint the initialiser/crawler, cd into the correct folder (i.e. `initialiser`/`crawler`) and run:
+To lint the initialiser|crawler, cd into the correct folder (i.e. `services/initialiser`|`crawler`) and run:
 ```
 make lint
 ```

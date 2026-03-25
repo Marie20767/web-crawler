@@ -17,6 +17,7 @@ type App struct {
 	LogLevel    slog.Level
 	Environment Environment
 	Kafka       *Kafka
+	AWS         *AWS
 }
 
 type Environment string
@@ -45,17 +46,24 @@ type Kafka struct {
 	Topic  string
 }
 
+type AWS struct {
+	ObjectStorePrefix string
+	BucketName        string
+}
+
 func ParseEnv() (*App, error) {
 	// Ignore error because in production there will be no .env file, env vars will be passed
 	// in at runtime via docker run command/docker-compose
 	_ = godotenv.Load()
 
 	envVars := map[string]string{
-		"SERVER_PORT":  "",
-		"LOG_LEVEL":    "",
-		"ENVIRONMENT":  "",
-		"KAFKA_BROKER": "",
-		"KAFKA_TOPIC":  "",
+		"SERVER_PORT":         "",
+		"LOG_LEVEL":           "",
+		"ENVIRONMENT":         "",
+		"KAFKA_BROKER":        "",
+		"KAFKA_TOPIC":         "",
+		"BUCKET_NAME":         "",
+		"OBJECT_STORE_PREFIX": "",
 	}
 
 	for key := range envVars {
@@ -83,6 +91,10 @@ func ParseEnv() (*App, error) {
 		Kafka: &Kafka{
 			Broker: envVars["KAFKA_BROKER"],
 			Topic:  envVars["KAFKA_TOPIC"],
+		},
+		AWS: &AWS{
+			BucketName:        envVars["BUCKET_NAME"],
+			ObjectStorePrefix: envVars["OBJECT_STORE_PREFIX"],
 		},
 	}, nil
 }
