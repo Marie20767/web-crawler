@@ -27,7 +27,7 @@ func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
 
 	return &Store{
 		client:     client,
-        prefix: prefix,
+		prefix:     prefix,
 		bucketName: bucketName,
 		ctx:        ctx,
 	}, nil

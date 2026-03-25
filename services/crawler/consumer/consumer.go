@@ -83,14 +83,14 @@ func (c *Consumer) Consume() error {
 		}
 
 		slog.Info("processing message", slog.String("id", string(msg.Key)))
-		if err := c.processMessage(msg); err != nil {
+		if err := c.processMessage(&msg); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 			continue
 		}
 	}
 }
 
-func (c *Consumer) processMessage(msg kafka.Message) error {
+func (c *Consumer) processMessage(msg *kafka.Message) error {
 	parsedURL, err := url.Parse(string(msg.Value))
 	if err != nil {
 		return fmt.Errorf("parse URL %w", err)
@@ -99,8 +99,7 @@ func (c *Consumer) processMessage(msg kafka.Message) error {
 	httpCtx, cancel := context.WithTimeout(c.ctx, httpTimeout)
 	defer cancel()
 
-	url := parsedURL.String()
-	res, skipped, err := c.fetchWithLimit(httpCtx, url)
+	res, skipped, err := c.fetchWithLimit(httpCtx, parsedURL.String())
 	if !skipped {
 		return c.objectStore.StoreHTML(string(msg.Key), res)
 	}
