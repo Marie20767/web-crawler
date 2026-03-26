@@ -52,6 +52,12 @@ There are currently no test files in this codebase.
 
 GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to `master` (release to Docker Hub via `DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets).
 
+## Go
+- Target Go 1.25+ — always use modern idioms and APIs
+- Use `wg.Go(func() { ... })` instead of `wg.Add(1)` + deferred `wg.Done()`
+- Prefer `sync/atomic` typed operations, `slices`, `maps`, and `cmp` standard library packages where applicable
+- Do not use deprecated pre-1.21 patterns (e.g. manual `sort.Slice` over `slices.SortFunc`)
+
 ## End-of-Session Habits
 
 - run `/reflection` after sessions with significant debugging, new patterns, or workflow friction to review and improve this config.

@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	workerCount = 10
+
 	kafkaTimeout      = 10 * time.Second
 	kafkaPollInterval = 30 * time.Second
 	kafkaMinBatchSize = 10e3 // 10KB
@@ -23,7 +25,10 @@ const (
 
 	maxContentSize = 2 * 1024 * 1024 // 2 MB
 
-	httpTimeout = 30 * time.Second
+	httpTimeout         = 30 * time.Second
+	maxIdleConns        = 200
+	maxIdleConnsPerHost = 20
+	idleConnTimeout     = 90 * time.Second
 )
 
 type Consumer struct {
@@ -49,8 +54,15 @@ func New(ctx context.Context, broker, topic, bucketName, prefix string) (*Consum
 	}
 
 	return &Consumer{
-		reader:      reader,
-		httpClient:  &http.Client{},
+		reader: reader,
+		httpClient: &http.Client{
+			Timeout: httpTimeout,
+			Transport: &http.Transport{
+				MaxIdleConns:        maxIdleConns,
+				MaxIdleConnsPerHost: maxIdleConnsPerHost,
+				IdleConnTimeout:     idleConnTimeout,
+			},
+		},
 		ctx:         ctx,
 		objectStore: objectStore,
 	}, nil
@@ -96,10 +108,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return fmt.Errorf("parse URL %w", err)
 	}
 
-	httpCtx, cancel := context.WithTimeout(c.ctx, httpTimeout)
-	defer cancel()
-
-	res, skipped, err := c.fetchWithLimit(httpCtx, parsedURL.String())
+	res, skipped, err := c.fetchWithLimit(c.ctx, parsedURL.String())
 	if !skipped {
 		return c.objectStore.StoreHTML(string(msg.Key), res)
 	}
