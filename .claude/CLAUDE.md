@@ -52,9 +52,11 @@ There are currently no test files in this codebase.
 
 GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to `master` (release to Docker Hub via `DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets).
 
-## Rules
+## End-of-Session Habits
 
-### At the end of each session
+- run `/reflection` after sessions with significant debugging, new patterns, or workflow friction to review and improve this config.
+
+Do NOT run these automatically on every session — only when the session involved novel problems, significant debugging, or workflow friction worth capturing.
 
 - if crawler and or initialiser code is added/modified, run `make lint` from the directory to ensure lint errors are fixed. If there are any errors then fix them.
 - run `/reflection` to turn session-specific lessons into project rules when applicable
