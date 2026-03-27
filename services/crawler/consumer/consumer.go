@@ -156,7 +156,7 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 	defer res.Body.Close() //nolint:errcheck
 
 	if res.ContentLength > maxContentSize {
-		slog.Info("skipped large web page based on content-length header", slog.Int64("content-length", int64(res.ContentLength)))
+		slog.Info("skipped large web page based on content-length header", slog.Int64("content-length", res.ContentLength))
 		return nil, true, nil
 	}
 
