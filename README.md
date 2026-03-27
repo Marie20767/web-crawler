@@ -31,7 +31,7 @@ make up
 
 Kafka must be running first:
 ```bash
-cd kafka/docker && make up
+cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
 ```
 

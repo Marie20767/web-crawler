@@ -129,7 +129,7 @@ func (c *Consumer) Consume() error {
 func (c *Consumer) processMessage(msg *kafka.Message) error {
 	parsedURL, err := url.Parse(string(msg.Value))
 	if err != nil {
-		return fmt.Errorf("parse URL %w", err)
+		return err
 	}
 
 	res, skipped, err := c.fetchWithLimit(c.ctx, parsedURL.String())

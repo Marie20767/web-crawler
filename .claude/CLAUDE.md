@@ -12,7 +12,7 @@ Initialiser → Kafka (url topic) → Crawler → AWS S3
 
 - **Initialiser** (`services/initialiser/`): Produces seed URLs to Kafka. One-shot execution.
 - **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3.
-- **Kafka** (`kafka/docker/`): Apache Kafka 4.2.0, auto-creates the `url` topic on startup.
+- **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0, auto-creates the `url` topic on startup.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
 Both services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` or producer logic).
@@ -42,7 +42,7 @@ make docker/build-and-push
 make up    # from repo root
 
 # Kafka only
-cd kafka/docker && make up
+cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
 ```
 

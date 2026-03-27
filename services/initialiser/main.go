@@ -58,7 +58,7 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		return fmt.Errorf("parse env vars: %w", err)
+		return err
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
