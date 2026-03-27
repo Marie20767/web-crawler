@@ -1,39 +1,60 @@
 ## Distributed Web Crawler
 
-Implementation of a distributed web crawler using:
- - Kafka
- - Golang
- - Terraform
+A distributed web crawler built with two Go microservices communicating via Apache Kafka, storing crawled HTML in AWS S3.
 
-### App architecture
+### Stack
+
+- Go
+- Apache Kafka
+- AWS S3 (via Terraform)
+- Docker
+
+### Architecture
+
 ![high-level system architecture](apparchitecture.png)
 
 ### Development
 
-#### Run with docker
+#### Prerequisites
+
+The crawler requires AWS SSO authentication before running:
+```bash
+aws sso login --profile terraform
 ```
+
+#### Run full stack (Kafka + both services)
+```bash
 make up
 ```
 
-#### Run without docker
-To run the initialiser|crawler, cd into the correct folder (i.e. `services/initialiser`|`crawler`) and run:
+#### Run services individually
+
+Kafka must be running first:
+```bash
+cd kafka/docker && make up
+# Kafka UI: http://localhost:8080
 ```
+
+Then from `services/initialiser/` or `services/crawler/`:
+```bash
 make run
 ```
 
-Kafka is only run via docker. From `kafka/docker`, run:
-```
-make up
-```
-
 #### Lint
-To lint the initialiser|crawler, cd into the correct folder (i.e. `services/initialiser`|`crawler`) and run:
-```
-make lint
+```bash
+make lint        # install + run
+make lint/fix    # auto-fix
 ```
 
-or
+#### Build (Linux x86_64 binary)
+```bash
+make build
+```
 
-```
-make lint/fix
-```
+### Infrastructure
+
+Terraform config is in `infra/terraform/`. Requires `aws sso login --profile terraform` before applying.
+
+### CI/CD
+
+GitHub Actions workflows run on PRs to `master` (build + lint) and pushes to `master` (release to Docker Hub).
