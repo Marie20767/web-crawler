@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"slices"
 
 	"github.com/joho/godotenv"
 )
@@ -13,24 +12,8 @@ import (
 type Role string
 
 type App struct {
-	Port        string
-	LogLevel    slog.Level
-	Environment Environment
-	Kafka       *Kafka
-}
-
-type Environment string
-
-const (
-	EnvironmentDevelopment Environment = "development"
-	EnvironmentProduction  Environment = "production"
-	EnvironmentTest        Environment = "test"
-)
-
-var validEnvironments = []Environment{
-	EnvironmentDevelopment,
-	EnvironmentProduction,
-	EnvironmentTest,
+	LogLevel slog.Level
+	Kafka    *Kafka
 }
 
 var logLevelMap = map[string]slog.Level{
@@ -51,9 +34,7 @@ func ParseEnv() (*App, error) {
 	_ = godotenv.Load()
 
 	envVars := map[string]string{
-		"SERVER_PORT":  "",
 		"LOG_LEVEL":    "",
-		"ENVIRONMENT":  "",
 		"KAFKA_BROKER": "",
 		"KAFKA_TOPIC":  "",
 	}
@@ -71,15 +52,8 @@ func ParseEnv() (*App, error) {
 		return nil, errors.New("LOG_LEVEL should be one of debug|info|warning|error")
 	}
 
-	environment := Environment(envVars["ENVIRONMENT"])
-	if !slices.Contains(validEnvironments, environment) {
-		return nil, errors.New("ENVIRONMENT should be one of development|production|test")
-	}
-
 	return &App{
-		Port:        envVars["SERVER_PORT"],
-		LogLevel:    logLevel,
-		Environment: environment,
+		LogLevel: logLevel,
 		Kafka: &Kafka{
 			Broker: envVars["KAFKA_BROKER"],
 			Topic:  envVars["KAFKA_TOPIC"],
