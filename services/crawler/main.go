@@ -27,7 +27,6 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("parse env vars", slog.Any("error", err))
 		return fmt.Errorf("parse env vars: %w", err)
 	}
 

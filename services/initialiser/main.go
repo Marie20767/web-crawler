@@ -58,7 +58,6 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("parse env vars", slog.Any("error", err))
 		return fmt.Errorf("parse env vars: %w", err)
 	}
 
@@ -70,23 +69,25 @@ func run() error {
 	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
 	defer writer.Close() //nolint:errcheck
 
+	failedCount := 0
 	for _, url := range seedURLs {
-		msgId := uuid.New()
+		msgID := uuid.New()
 		msg := kafka.Message{
-			Key:   fmt.Appendf(nil, "key-%s", msgId),
+			Key:   msgID[:],
 			Value: []byte(url),
 		}
 
 		err := writer.WriteMessages(ctx, msg)
 		if err != nil {
+			failedCount++
 			slog.Error("write message", slog.Any("error", err))
 			continue
 		}
 
-		slog.Info("produced message", slog.String("id", msgId.String()), slog.String("url", url))
+		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
 	}
 
-	slog.Info("producing to topic complete")
+	slog.Info("producing to topic complete", slog.Int("total", len(seedURLs)), slog.Int("failed", failedCount))
 
 	return nil
 }

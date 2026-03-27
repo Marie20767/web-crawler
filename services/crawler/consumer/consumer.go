@@ -154,6 +154,10 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 		return nil, false, fmt.Errorf("make web page request %w", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
+	if res.StatusCode >= 400 {
+		slog.Error("unexpected status", slog.Int("code", res.StatusCode))
+		return nil, false, fmt.Errorf("unexpected status: %d", res.StatusCode)
+	}
 
 	if res.ContentLength > maxContentSize {
 		slog.Info("skipped large web page based on content-length header", slog.Int64("content-length", res.ContentLength))
