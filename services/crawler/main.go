@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/marie20767/web-crawler/config"
-	"github.com/marie20767/web-crawler/consumer"
+	"github.com/marie20767/web-crawler/services/crawler/config"
+	"github.com/marie20767/web-crawler/services/crawler/consumer"
 )
 
 func main() {

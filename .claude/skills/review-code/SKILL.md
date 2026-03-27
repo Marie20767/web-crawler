@@ -2,7 +2,7 @@
 name: review-code
 description: Reviews code for quality, bugs, or security issues. Use when the user asks to review, audit, or check code quality.
 argument-hint: [path] [focus: quality|security|performance|structure]
-allowed-tools: Read, Bash(rg:*), Glob
+allowed-tools: Read, Bash(rg:*), Bash(make:*), Bash(cd:*), Glob
 ---
 
 You will receive arguments in this format: `$ARGUMENTS`

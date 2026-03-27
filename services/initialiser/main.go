@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
-	"github.com/marie20767/web-crawler/config"
+	"github.com/marie20767/web-crawler/services/initialiser/config"
 )
 
 const kafkaMaxAttempts = 5

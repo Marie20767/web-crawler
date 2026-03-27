@@ -13,7 +13,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
-	"github.com/marie20767/web-crawler/objectstorage"
+	"github.com/marie20767/web-crawler/services/crawler/objectstorage"
 )
 
 const (
