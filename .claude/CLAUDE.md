@@ -53,10 +53,10 @@ There are currently no test files in this codebase.
 GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to `master` (release to Docker Hub via `DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets).
 
 ## Go
-- Target Go 1.25+ — always use modern idioms and APIs
-- Use `wg.Go(func() { ... })` instead of `wg.Add(1)` + deferred `wg.Done()`
-- Prefer `sync/atomic` typed operations, `slices`, `maps`, and `cmp` standard library packages where applicable
-- Do not use deprecated pre-1.21 patterns (e.g. manual `sort.Slice` over `slices.SortFunc`)
+- Target Go 1.25+ — always use modern idioms and APIs.
+- Use `wg.Go(func() { ... })` instead of `wg.Add(1)` + deferred `wg.Done()`.
+- Prefer `sync/atomic` typed operations, `slices`, `maps`, and `cmp` standard library packages where applicable.
+- Do not use deprecated pre-1.21 patterns (e.g. manual `sort.Slice` over `slices.SortFunc`).
 
 ## End-of-Session Habits
 
@@ -64,8 +64,8 @@ GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to
 
 Do NOT run these automatically on every session — only when the session involved novel problems, significant debugging, or workflow friction worth capturing.
 
-- if crawler and or initialiser code is added/modified, run `make lint` from the directory to ensure lint errors are fixed. If there are any errors then fix them.
-- run `/reflection` to turn session-specific lessons into project rules when applicable
+- after adding or modifying any code under `services/`, run `make lint` from the affected service directory (e.g. `services/crawler/`). Fix any errors before finishing.
+- run `/reflection` to turn session-specific lessons into project rules when applicable.
 
 ## Important to note
 
