@@ -45,5 +45,5 @@ Summarise findings as:
 1. **Critical** – must fix
 2. **Suggestions** – worth improving
 
-Always reference specific file names and line numbers where possible.
+Always reference specific file names and line numbers.
 For structure suggestions, show a before/after directory tree.

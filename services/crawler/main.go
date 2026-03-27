@@ -36,12 +36,11 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	reader, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
+	consmr, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer consmr.Close()
 
-	err = reader.Consume()
-	return err
+	return consmr.Consume()
 }

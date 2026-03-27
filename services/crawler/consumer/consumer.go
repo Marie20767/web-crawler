@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -69,35 +70,56 @@ func New(ctx context.Context, broker, topic, bucketName, prefix string) (*Consum
 }
 
 func (c *Consumer) Consume() error {
+	jobs := make(chan kafka.Message, workerCount)
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Go(func() {
+			for msg := range jobs {
+				slog.Info("processing message", slog.String("id", string(msg.Key)))
+				if err := c.processMessage(&msg); err != nil {
+					slog.Error("process message", slog.Any("error", err))
+				}
+			}
+		})
+	}
+
+	defer wg.Wait()
+	defer close(jobs)
+
 	for {
 		readCtx, cancel := context.WithTimeout(c.ctx, kafkaTimeout)
 		msg, err := c.reader.ReadMessage(readCtx)
 		cancel()
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
-			select {
-			case <-c.ctx.Done():
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				timer := time.NewTimer(kafkaPollInterval)
+
+				slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
+				select {
+				case <-c.ctx.Done():
+					timer.Stop()
+					slog.Info("context cancelled")
+					return nil
+				case <-timer.C:
+					continue
+				}
+			}
+
+			if errors.Is(err, context.Canceled) {
 				slog.Info("context cancelled")
 				return nil
-			case <-time.After(kafkaPollInterval):
-				continue
 			}
-		}
-		if errors.Is(err, context.Canceled) {
-			slog.Info("context cancelled")
-			return nil
-		}
 
-		if err != nil {
 			slog.Error("consume from topic", slog.Any("error", err))
 			return err
 		}
 
-		slog.Info("processing message", slog.String("id", string(msg.Key)))
-		if err := c.processMessage(&msg); err != nil {
-			slog.Error("process message", slog.Any("error", err))
-			continue
+		select {
+		case jobs <- msg:
+		case <-c.ctx.Done():
+			return nil
 		}
 	}
 }
@@ -109,11 +131,14 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	}
 
 	res, skipped, err := c.fetchWithLimit(c.ctx, parsedURL.String())
-	if !skipped {
-		return c.objectStore.StoreHTML(string(msg.Key), res)
+	if err != nil {
+		return err
+	}
+	if skipped {
+		return nil
 	}
 
-	return err
+	return c.objectStore.StoreHTML(string(msg.Key), res)
 }
 
 func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
@@ -130,6 +155,12 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 	}
 	defer res.Body.Close() //nolint:errcheck
 
+	if res.ContentLength > maxContentSize {
+		slog.Info("skipped large web page based on content-length header", slog.Int64("content-length", int64(res.ContentLength)))
+		return nil, true, nil
+	}
+
+	// fallback if content-length header is absent/untrustworthy
 	limited := io.LimitReader(res.Body, maxContentSize+1)
 	data, err = io.ReadAll(limited)
 
