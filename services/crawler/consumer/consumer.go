@@ -30,6 +30,8 @@ const (
 	maxIdleConns        = 200
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
+
+	httpErrorStatusThreshold = 400
 )
 
 type Consumer struct {
@@ -144,18 +146,15 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
 	req, err := http.NewRequestWithContext(httpCtx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
-		slog.Error("create web page request", slog.Any("error", err))
 		return nil, false, fmt.Errorf("create web page request %w", err)
 	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.Error("make web page request", slog.Any("error", err))
 		return nil, false, fmt.Errorf("make web page request %w", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
-	if res.StatusCode >= 400 {
-		slog.Error("unexpected status", slog.Int("code", res.StatusCode))
+	if res.StatusCode >= httpErrorStatusThreshold {
 		return nil, false, fmt.Errorf("unexpected status: %d", res.StatusCode)
 	}
 
@@ -169,7 +168,6 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 	data, err = io.ReadAll(limited)
 
 	if err != nil {
-		slog.Error("read response", slog.Any("error", err))
 		return nil, false, fmt.Errorf("read response: %w", err)
 	}
 

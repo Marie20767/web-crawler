@@ -43,7 +43,6 @@ func (s *Store) StoreHTML(messageID string, html []byte) error {
 		Body:        bytes.NewReader(html),
 		ContentType: &contentType,
 	}); err != nil {
-		slog.Error("upload HTML to object store", slog.Any("error", err))
 		return fmt.Errorf("upload HTML to object store %w", err)
 	}
 
