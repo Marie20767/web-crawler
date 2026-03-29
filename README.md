@@ -13,6 +13,23 @@ A distributed web crawler built with two Go microservices communicating via Apac
 
 ![high-level system architecture](apparchitecture.png)
 
+### Repo Structure
+
+This repository uses a multi-module structure with a Go workspace.
+
+/shared                  # reusable library code (e.g. config, common libraries, etc.)
+  go.mod
+
+/services/crawler        # crawler service
+  go.mod
+
+/services/initialiser    # initialiser service
+  go.mod
+
+go.work                  # workspace definition (links modules together locally)
+
+Each module manages its own dependencies independently.
+
 ### Development
 
 #### Prerequisites

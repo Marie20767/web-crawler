@@ -64,7 +64,7 @@ GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to
 
 Do NOT run these automatically on every session — only when the session involved novel problems, significant debugging, or workflow friction worth capturing.
 
-- after any session that touches files under `services/` — whether modifying, fixing, or reviewing — run `make lint` from the affected service directory. Fix any errors before finishing.
+- after any session that touches files under `services/` — whether modifying, fixing, or reviewing — run `make lint` and `make build` from the affected service directory. Fix any errors before finishing.
 
 ## Important to note
 
