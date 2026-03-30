@@ -5,10 +5,12 @@ FROM golang:1.25 AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum Makefile ./
+COPY shared/ /shared/
+
+COPY services/initialiser/go.mod services/initialiser/go.sum services/initialiser/Makefile ./
 RUN make dep
 
-COPY . .
+COPY services/initialiser/ .
 
 RUN make build
 

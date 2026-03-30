@@ -30,7 +30,8 @@ build:
 docker/local-build:
 	DOCKER_BUILDKIT=1 docker buildx build \
 	-f docker/Dockerfile \
-	-t $(DOCKER_USER)/$(IMAGE_NAME):local .
+	-t $(DOCKER_USER)/$(IMAGE_NAME):local \
+	../..
 
 # For CI caching
 CACHE_FROM ?=
@@ -44,7 +45,7 @@ docker/ci-build:
 	-f docker/Dockerfile \
 	-t $(DOCKER_USER)/$(IMAGE_NAME):latest \
 	-t $(DOCKER_USER)/$(IMAGE_NAME):$(GIT_HASH) \
-  .
+	../..
 
 docker/push:
 	docker push --all-tags $(DOCKER_USER)/$(IMAGE_NAME)
@@ -55,4 +56,5 @@ docker/build-and-push:
 	--push \
 	-f docker/Dockerfile \
 	-t $(DOCKER_USER)/$(IMAGE_NAME):latest \
-	-t $(DOCKER_USER)/$(IMAGE_NAME):$(GIT_HASH) .
+	-t $(DOCKER_USER)/$(IMAGE_NAME):$(GIT_HASH) \
+	../..

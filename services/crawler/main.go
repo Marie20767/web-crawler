@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/marie20767/web-crawler/config"
-	"github.com/marie20767/web-crawler/consumer"
+	"github.com/marie20767/web-crawler/services/crawler/config"
+	"github.com/marie20767/web-crawler/services/crawler/consumer"
 )
 
 func main() {
@@ -27,8 +26,7 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("parse env vars", slog.Any("error", err))
-		return fmt.Errorf("parse env vars: %w", err)
+		return err
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -36,12 +34,11 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	reader, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
+	consmr, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer consmr.Close()
 
-	err = reader.Consume()
-	return err
+	return consmr.Consume()
 }

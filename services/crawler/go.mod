@@ -1,13 +1,15 @@
-module github.com/marie20767/web-crawler
+module github.com/marie20767/web-crawler/services/crawler
 
 go 1.25
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.2
-	github.com/joho/godotenv v1.5.1
+	github.com/marie20767/web-crawler/shared v0.0.0-00010101000000-000000000000
 	github.com/segmentio/kafka-go v0.4.50
 )
+
+replace github.com/marie20767/web-crawler/shared => ../../shared
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
@@ -27,6 +29,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9 // indirect
 	github.com/aws/smithy-go v1.24.2 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 )

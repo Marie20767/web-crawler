@@ -5,10 +5,12 @@ FROM golang:1.25 AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum Makefile ./
+COPY shared/ /shared/
+
+COPY services/crawler/go.mod services/crawler/go.sum services/crawler/Makefile ./
 RUN make dep
 
-COPY . .
+COPY services/crawler/ .
 
 RUN make build
 

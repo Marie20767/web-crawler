@@ -14,7 +14,6 @@ type Store struct {
 	client     *s3.Client
 	prefix     string
 	bucketName string
-	ctx        context.Context
 }
 
 func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
@@ -29,22 +28,20 @@ func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
 		client:     client,
 		prefix:     prefix,
 		bucketName: bucketName,
-		ctx:        ctx,
 	}, nil
 }
 
-func (s *Store) StoreHTML(messageID string, html []byte) error {
+func (s *Store) StoreHTML(ctx context.Context, messageID string, html []byte) error {
 	contentType := "text/html"
 	key := s.prefix + "/" + messageID
 
-	if _, err := s.client.PutObject(s.ctx, &s3.PutObjectInput{
+	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
 		Key:         &key,
 		Body:        bytes.NewReader(html),
 		ContentType: &contentType,
 	}); err != nil {
-		slog.Error("upload HTML to object store", slog.Any("error", err))
-		return fmt.Errorf("upload HTML to object store %w", err)
+		return fmt.Errorf("upload HTML to object store %v", err)
 	}
 
 	slog.Info("successfully uploaded HTML to object store")

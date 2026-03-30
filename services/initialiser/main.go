@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
-	"github.com/marie20767/web-crawler/config"
+	"github.com/marie20767/web-crawler/services/initialiser/config"
 )
 
 const kafkaMaxAttempts = 5
@@ -18,6 +17,27 @@ var seedURLs = []string{
 	"https://www.bookbrowse.com/read-alikes/",
 	"https://www.goodreads.com/list/tag/read-alikes",
 	"https://www.whatshouldireadnext.com/",
+	"https://www.libraryreads.org/",
+	"https://www.overbooked.org/",
+	"https://www.whichbook.net/",
+	"https://www.gnooks.com/",
+	"https://www.yalsa.ala.org/thehub/category/read-alikes/",
+	"https://bookriot.com/?s=read+alike",
+	"https://www.thereadinglist.co.uk/",
+	"https://www.goodreads.com/list/tag/similar-books",
+	"https://www.goodreads.com/list/tag/if-you-liked",
+	"https://www.panmacmillan.com/readers-resources/read-alikes",
+	"https://www.penguinrandomhouse.com/the-read-down/",
+	"https://www.reddit.com/r/suggestmeabook/",
+	"https://www.reddit.com/r/booksuggestions/",
+	"https://www.reddit.com/r/Fantasy/comments/readalikes",
+	"https://www.reddit.com/r/scifi/search/?q=if+you+like",
+	"https://www.mysterysequels.com/",
+	"https://www.fantasticfiction.com/similar/",
+	"https://crimereads.com/?s=if+you+like",
+	"https://www.thrillerwriters.org/resources/read-alikes/",
+	"https://www.nytimes.com/search?query=if+you+liked",
+	"https://www.theguardian.com/books/series/if-you-liked",
 }
 
 func main() {
@@ -34,8 +54,7 @@ func run() error {
 
 	cfg, err := config.ParseEnv()
 	if err != nil {
-		slog.Error("parse env vars", slog.Any("error", err))
-		return fmt.Errorf("parse env vars: %w", err)
+		return err
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -46,23 +65,25 @@ func run() error {
 	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
 	defer writer.Close() //nolint:errcheck
 
+	failedCount := 0
 	for _, url := range seedURLs {
-		msgId := uuid.New()
+		msgID := uuid.New()
 		msg := kafka.Message{
-			Key:   fmt.Appendf(nil, "key-%s", msgId),
+			Key:   []byte(msgID.String()),
 			Value: []byte(url),
 		}
 
 		err := writer.WriteMessages(ctx, msg)
 		if err != nil {
+			failedCount++
 			slog.Error("write message", slog.Any("error", err))
 			continue
 		}
 
-		slog.Info("produced message", slog.String("id", msgId.String()), slog.String("url", url))
+		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
 	}
 
-	slog.Info("producing to topic complete")
+	slog.Info("producing to topic complete", slog.Int("total", len(seedURLs)), slog.Int("failed", failedCount))
 
 	return nil
 }
