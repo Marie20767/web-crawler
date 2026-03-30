@@ -3,6 +3,10 @@
 bin/
 .idea
 
+# go binaries
+url-initialiser
+url-crawler
+
 # Terraform files
 .terraform/
 *.tfplan
