@@ -13,8 +13,8 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
+	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/objectstorage"
-	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
 
 const (
@@ -39,11 +39,11 @@ type Consumer struct {
 	httpClient  *http.Client
 	reader      *kafka.Reader
 	ctx         context.Context
-	kafkaCfg    *sharedconfig.Kafka
+	kafkaCfg    *config.Kafka
 	objectStore *objectstorage.Store
 }
 
-func New(ctx context.Context, kafkaCfg *sharedconfig.Kafka, bucketName, prefix string) (*Consumer, error) {
+func New(ctx context.Context, kafkaCfg *config.Kafka, bucketName, prefix string) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{kafkaCfg.Broker},
 		Topic:   kafkaCfg.URLTopic,

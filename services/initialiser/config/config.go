@@ -6,9 +6,14 @@ import (
 	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
 
+type Kafka struct {
+	Broker   string
+	URLTopic string
+}
+
 type App struct {
 	LogLevel slog.Level
-	Kafka    *sharedconfig.Kafka
+	Kafka    *Kafka
 }
 
 func ParseEnv() (*App, error) {
@@ -28,7 +33,7 @@ func ParseEnv() (*App, error) {
 
 	return &App{
 		LogLevel: logLevel,
-		Kafka: &sharedconfig.Kafka{
+		Kafka: &Kafka{
 			Broker:   envVars["KAFKA_BROKER"],
 			URLTopic: envVars["KAFKA_URL_TOPIC"],
 		},
