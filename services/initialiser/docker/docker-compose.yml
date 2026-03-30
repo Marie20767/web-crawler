@@ -1,15 +1,12 @@
 services:
   url-initialiser:
     build:
-      context: ../ 
-      dockerfile: docker/Dockerfile
+      context: ../../.. 
+      dockerfile: services/initialiser/docker/Dockerfile
     container_name: url-initialiser
     depends_on:
       kafka-init:
         condition: service_completed_successfully
     env_file:
       .env.docker
-    environment:
-      KAFKA_BROKER: kafka:9092
-      KAFKA_URL_TOPIC: url
     restart: on-failure

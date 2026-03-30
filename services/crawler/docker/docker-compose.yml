@@ -1,16 +1,12 @@
 services:
   url-crawler:
     build:
-      context: ../ 
-      dockerfile: docker/Dockerfile
+      context: ../../.. 
+      dockerfile: services/crawler/docker/Dockerfile
     container_name: url-crawler
     depends_on:
       kafka-init:
         condition: service_completed_successfully
     env_file:
       .env.docker
-    environment:
-      KAFKA_BROKER: kafka:9092
-      KAFKA_URL_TOPIC: url
-      KAFKA_DLQ_TOPIC: url-dlq
     restart: on-failure
