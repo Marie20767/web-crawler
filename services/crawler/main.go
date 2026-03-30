@@ -9,6 +9,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/consumer"
+	"github.com/marie20767/web-crawler/services/crawler/producer"
 )
 
 func main() {
@@ -34,11 +35,17 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	consmr, err := consumer.New(ctx, cfg.Kafka, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
+	prod, err := producer.New(ctx, cfg.Kafka)
 	if err != nil {
 		return err
 	}
-	defer consmr.Close()
+	defer prod.Close()
 
-	return consmr.Consume()
+	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS, prod)
+	if err != nil {
+		return err
+	}
+	defer cons.Close()
+
+	return cons.Consume()
 }

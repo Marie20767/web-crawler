@@ -15,6 +15,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/objectstorage"
+	"github.com/marie20767/web-crawler/services/crawler/producer"
 )
 
 const (
@@ -39,11 +40,11 @@ type Consumer struct {
 	httpClient  *http.Client
 	reader      *kafka.Reader
 	ctx         context.Context
-	kafkaCfg    *config.Kafka
 	objectStore *objectstorage.Store
+	producer    *producer.Producer
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, bucketName, prefix string) (*Consumer, error) {
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, producer *producer.Producer) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{kafkaCfg.Broker},
 		Topic:   kafkaCfg.URLTopic,
@@ -53,7 +54,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, bucketName, prefix string)
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objectStore, err := objectstorage.New(ctx, bucketName, prefix)
+	objectStore, err := objectstorage.New(ctx, awsCfg.BucketName, awsCfg.ObjectStorePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +70,8 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, bucketName, prefix string)
 			},
 		},
 		ctx:         ctx,
-		kafkaCfg:    kafkaCfg,
 		objectStore: objectStore,
+		producer:    producer,
 	}, nil
 }
 
@@ -84,6 +85,7 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(msg.Key)))
 				if err := c.processMessage(&msg); err != nil {
 					slog.Error("process message", slog.Any("error", err))
+					// TODO: publish to DLQ topic
 				}
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), msg); err != nil {
 					slog.Error("commit message offset", slog.Any("error", err))
