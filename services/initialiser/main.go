@@ -62,7 +62,7 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
+	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.URLTopic)
 	defer writer.Close() //nolint:errcheck
 
 	failedCount := 0

@@ -10,8 +10,9 @@ import (
 )
 
 type Kafka struct {
-	Broker string
-	Topic  string
+	Broker   string
+	URLTopic string
+	DLQTopic string
 }
 
 var logLevelMap = map[string]slog.Level{

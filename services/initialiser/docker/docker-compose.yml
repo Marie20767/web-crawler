@@ -5,11 +5,11 @@ services:
       dockerfile: docker/Dockerfile
     container_name: url-initialiser
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     env_file:
       .env.docker
     environment:
       KAFKA_BROKER: kafka:9092
-      KAFKA_TOPIC: url
+      KAFKA_URL_TOPIC: url
     restart: on-failure

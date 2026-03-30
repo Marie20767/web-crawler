@@ -34,7 +34,7 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	consmr, err := consumer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.Topic, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
+	consmr, err := consumer.New(ctx, cfg.Kafka, cfg.AWS.BucketName, cfg.AWS.ObjectStorePrefix)
 	if err != nil {
 		return err
 	}
