@@ -121,6 +121,7 @@ func (c *Consumer) Consume() error {
 		select {
 		case jobs <- msg:
 		case <-c.ctx.Done():
+			slog.Warn("context cancelled, dropping unqueued message", slog.String("id", string(msg.Key)))
 			return nil
 		}
 	}
