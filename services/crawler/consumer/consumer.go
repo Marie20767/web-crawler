@@ -82,6 +82,9 @@ func (c *Consumer) Consume() error {
 				if err := c.processMessage(&msg); err != nil {
 					slog.Error("process message", slog.Any("error", err))
 				}
+				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), msg); err != nil {
+					slog.Error("commit message offset", slog.Any("error", err))
+				}
 			}
 		})
 	}
@@ -91,7 +94,7 @@ func (c *Consumer) Consume() error {
 
 	for {
 		readCtx, cancel := context.WithTimeout(c.ctx, kafkaTimeout)
-		msg, err := c.reader.ReadMessage(readCtx)
+		msg, err := c.reader.FetchMessage(readCtx)
 		cancel()
 
 		if err != nil {
