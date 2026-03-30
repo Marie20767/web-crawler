@@ -141,7 +141,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return nil
 	}
 
-	return c.objectStore.StoreHTML(string(msg.Key), res)
+	return c.objectStore.StoreHTML(context.WithoutCancel(c.ctx), string(msg.Key), res)
 }
 
 func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
