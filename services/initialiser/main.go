@@ -17,9 +17,7 @@ var seedURLs = []string{
 	"https://www.bookbrowse.com/read-alikes/",
 	"https://www.goodreads.com/list/tag/read-alikes",
 	"https://www.whatshouldireadnext.com/",
-	"https://www.novelist.ep.la/NoveList/servlet/NoveList",
 	"https://www.libraryreads.org/",
-	"https://www.pearsonvuereads.com/",
 	"https://www.overbooked.org/",
 	"https://www.whichbook.net/",
 	"https://www.gnooks.com/",
@@ -36,7 +34,6 @@ var seedURLs = []string{
 	"https://www.reddit.com/r/scifi/search/?q=if+you+like",
 	"https://www.mysterysequels.com/",
 	"https://www.fantasticfiction.com/similar/",
-	"https://www.sfsite.com/",
 	"https://crimereads.com/?s=if+you+like",
 	"https://www.thrillerwriters.org/resources/read-alikes/",
 	"https://www.nytimes.com/search?query=if+you+liked",
@@ -72,7 +69,7 @@ func run() error {
 	for _, url := range seedURLs {
 		msgID := uuid.New()
 		msg := kafka.Message{
-			Key:   msgID[:],
+			Key:   []byte(msgID.String()),
 			Value: []byte(url),
 		}
 
