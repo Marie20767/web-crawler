@@ -29,7 +29,7 @@ const (
 	maxContentSize = 2 * 1024 * 1024 // 2 MB
 
 	httpTimeout         = 30 * time.Second
-	minErrStatusCode = 400
+	minErrStatusCode    = 400
 	maxIdleConns        = 200
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
