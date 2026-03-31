@@ -13,7 +13,9 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
+	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/objectstorage"
+	"github.com/marie20767/web-crawler/services/crawler/producer"
 )
 
 const (
@@ -27,31 +29,39 @@ const (
 	maxContentSize = 2 * 1024 * 1024 // 2 MB
 
 	httpTimeout         = 30 * time.Second
+	minErrStatusCode    = 400
 	maxIdleConns        = 200
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
-
-	httpErrorStatusThreshold = 400
 )
+
+type HTTPError struct {
+	StatusCode int
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("unexpected status: %d", e.StatusCode)
+}
 
 type Consumer struct {
 	httpClient  *http.Client
 	reader      *kafka.Reader
 	ctx         context.Context
 	objectStore *objectstorage.Store
+	producer    *producer.Producer
 }
 
-func New(ctx context.Context, broker, topic, bucketName, prefix string) (*Consumer, error) {
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{broker},
-		Topic:   topic,
+		Brokers: []string{kafkaCfg.Broker},
+		Topic:   kafkaCfg.URLTopic,
 
 		GroupID:  "crawler",
 		MinBytes: kafkaMinBatchSize,
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objectStore, err := objectstorage.New(ctx, bucketName, prefix)
+	objectStore, err := objectstorage.New(ctx, awsCfg.BucketName, awsCfg.ObjectStorePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +78,7 @@ func New(ctx context.Context, broker, topic, bucketName, prefix string) (*Consum
 		},
 		ctx:         ctx,
 		objectStore: objectStore,
+		producer:    prod,
 	}, nil
 }
 
@@ -81,7 +92,15 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(msg.Key)))
 				if err := c.processMessage(&msg); err != nil {
 					slog.Error("process message", slog.Any("error", err))
+					var httpErr *HTTPError
+					errStatusCode := 0
+					if errors.As(err, &httpErr) {
+						errStatusCode = httpErr.StatusCode
+					}
+
+					c.producer.PublishDLQ(&msg, errStatusCode)
 				}
+
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), msg); err != nil {
 					slog.Error("commit message offset", slog.Any("error", err))
 				}
@@ -135,6 +154,9 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	if err != nil {
 		return err
 	}
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return fmt.Errorf("invalid URL: %q", string(msg.Value))
+	}
 
 	ctx := context.WithoutCancel(c.ctx)
 
@@ -149,8 +171,8 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	return c.objectStore.StoreHTML(ctx, string(msg.Key), res)
 }
 
-func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
-	req, err := http.NewRequestWithContext(httpCtx, http.MethodGet, seedURL, http.NoBody)
+func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
 		return nil, false, fmt.Errorf("create web page request %w", err)
 	}
@@ -160,8 +182,8 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 		return nil, false, fmt.Errorf("make web page request %w", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
-	if res.StatusCode >= httpErrorStatusThreshold {
-		return nil, false, fmt.Errorf("unexpected status: %d", res.StatusCode)
+	if res.StatusCode >= minErrStatusCode {
+		return nil, false, &HTTPError{StatusCode: res.StatusCode}
 	}
 
 	if res.ContentLength > maxContentSize {

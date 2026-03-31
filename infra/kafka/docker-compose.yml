@@ -17,12 +17,24 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
-      # wait for url topic creation
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic url --partitions 1 --replication-factor 1 --if-not-exists"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
       interval: 10s
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  kafka-init:
+    image: apache/kafka:4.2.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic url --partitions 1 --replication-factor 1 --if-not-exists
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic url-dlq --partitions 1 --replication-factor 1 --if-not-exists
+    restart: "no"
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

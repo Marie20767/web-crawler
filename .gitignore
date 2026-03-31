@@ -3,8 +3,15 @@
 bin/
 .idea
 
+# go binaries
+url-initialiser
+url-crawler
+
 # Terraform files
 .terraform/
 *.tfplan
 *.tfstate
 *.tfstate.*
+
+# claude code
+REFLECTION_NEEDED.md

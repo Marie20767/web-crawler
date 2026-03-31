@@ -58,11 +58,18 @@ GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to
 - Prefer `sync/atomic` typed operations, `slices`, `maps`, and `cmp` standard library packages where applicable.
 - Do not use deprecated pre-1.21 patterns (e.g. manual `sort.Slice` over `slices.SortFunc`).
 
+## Session Start Checklist
+
+Check if .claude/REFLECTION_NEEDED.md exists.
+
+If it does, read its contents and treat them as additional context for this session — patterns, friction, or decisions made outside Claude that should inform your understanding of the codebase.
+If the file has content beyond the title `Reflection Notes` and the session warrants it (significant work noted),
+incorporate it when running /reflection. After reading, delete the file so it doesn't accumulate stale entries.
+If the file is empty or missing, continue normally.
+
 ## End-of-Session Habits
 
-- run `/reflection` after sessions with significant debugging, new patterns, or workflow friction to review and improve this config.
-
-Do NOT run these automatically on every session — only when the session involved novel problems, significant debugging, or workflow friction worth capturing.
+- at the end of any session that involved significant debugging, new patterns, architectural decisions, or workflow friction, run `/reflection` before closing. If unsure whether the session qualifies, run it anyway.
 
 - after any session that touches files under `services/` — whether modifying, fixing, or reviewing — run `make lint` and `make build` from the affected service directory. Fix any errors before finishing.
 

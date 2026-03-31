@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
@@ -11,7 +12,10 @@ import (
 	"github.com/marie20767/web-crawler/services/initialiser/config"
 )
 
-const kafkaMaxAttempts = 5
+const (
+	kafkaTimeout     = 30 * time.Second
+	kafkaMaxAttempts = 5
+)
 
 var seedURLs = []string{
 	"https://www.bookbrowse.com/read-alikes/",
@@ -62,8 +66,10 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.Topic)
+	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.URLTopic)
 	defer writer.Close() //nolint:errcheck
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancelCtx()
 
 	failedCount := 0
 	for _, url := range seedURLs {
@@ -73,17 +79,21 @@ func run() error {
 			Value: []byte(url),
 		}
 
-		err := writer.WriteMessages(ctx, msg)
+		err := writer.WriteMessages(writeCtx, msg)
 		if err != nil {
 			failedCount++
-			slog.Error("write message", slog.Any("error", err))
+			slog.Error("write message", slog.String("topic", cfg.Kafka.URLTopic), slog.Any("error", err))
 			continue
 		}
 
 		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
 	}
 
-	slog.Info("producing to topic complete", slog.Int("total", len(seedURLs)), slog.Int("failed", failedCount))
+	slog.Info("producing to topic complete",
+		slog.String("topic", cfg.Kafka.URLTopic),
+		slog.Int("total", len(seedURLs)),
+		slog.Int("failed", failedCount),
+	)
 
 	return nil
 }

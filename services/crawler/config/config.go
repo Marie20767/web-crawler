@@ -6,10 +6,10 @@ import (
 	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
 
-type App struct {
-	LogLevel slog.Level
-	Kafka    *sharedconfig.Kafka
-	AWS      *AWS
+type Kafka struct {
+	Broker   string
+	URLTopic string
+	DLQTopic string
 }
 
 type AWS struct {
@@ -17,11 +17,18 @@ type AWS struct {
 	BucketName        string
 }
 
+type App struct {
+	LogLevel slog.Level
+	Kafka    *Kafka
+	AWS      *AWS
+}
+
 func ParseEnv() (*App, error) {
 	envVars, err := sharedconfig.LoadEnvVars([]string{
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
-		"KAFKA_TOPIC",
+		"KAFKA_URL_TOPIC",
+		"KAFKA_DLQ_TOPIC",
 		"BUCKET_NAME",
 		"OBJECT_STORE_PREFIX",
 	})
@@ -36,9 +43,10 @@ func ParseEnv() (*App, error) {
 
 	return &App{
 		LogLevel: logLevel,
-		Kafka: &sharedconfig.Kafka{
-			Broker: envVars["KAFKA_BROKER"],
-			Topic:  envVars["KAFKA_TOPIC"],
+		Kafka: &Kafka{
+			Broker:   envVars["KAFKA_BROKER"],
+			URLTopic: envVars["KAFKA_URL_TOPIC"],
+			DLQTopic: envVars["KAFKA_DLQ_TOPIC"],
 		},
 		AWS: &AWS{
 			BucketName:        envVars["BUCKET_NAME"],

@@ -9,11 +9,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Kafka struct {
-	Broker string
-	Topic  string
-}
-
 var logLevelMap = map[string]slog.Level{
 	"debug": slog.LevelDebug,
 	"info":  slog.LevelInfo,
