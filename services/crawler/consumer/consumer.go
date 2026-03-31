@@ -29,12 +29,19 @@ const (
 	maxContentSize = 2 * 1024 * 1024 // 2 MB
 
 	httpTimeout         = 30 * time.Second
+	minErrStatusCode = 400
 	maxIdleConns        = 200
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
-
-	httpErrorStatusThreshold = 400
 )
+
+type HTTPError struct {
+	StatusCode int
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("unexpected status: %d", e.StatusCode)
+}
 
 type Consumer struct {
 	httpClient  *http.Client
@@ -44,7 +51,7 @@ type Consumer struct {
 	producer    *producer.Producer
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, producer *producer.Producer) (*Consumer, error) {
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{kafkaCfg.Broker},
 		Topic:   kafkaCfg.URLTopic,
@@ -71,7 +78,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, produc
 		},
 		ctx:         ctx,
 		objectStore: objectStore,
-		producer:    producer,
+		producer:    prod,
 	}, nil
 }
 
@@ -85,8 +92,15 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(msg.Key)))
 				if err := c.processMessage(&msg); err != nil {
 					slog.Error("process message", slog.Any("error", err))
-					// TODO: publish to DLQ topic
+					var httpErr *HTTPError
+					errStatusCode := 0
+					if errors.As(err, &httpErr) {
+						errStatusCode = httpErr.StatusCode
+					}
+
+					c.producer.PublishDLQ(&msg, errStatusCode)
 				}
+
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), msg); err != nil {
 					slog.Error("commit message offset", slog.Any("error", err))
 				}
@@ -140,6 +154,9 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	if err != nil {
 		return err
 	}
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return fmt.Errorf("invalid URL: %q", string(msg.Value))
+	}
 
 	ctx := context.WithoutCancel(c.ctx)
 
@@ -154,8 +171,8 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	return c.objectStore.StoreHTML(ctx, string(msg.Key), res)
 }
 
-func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data []byte, skipped bool, err error) {
-	req, err := http.NewRequestWithContext(httpCtx, http.MethodGet, seedURL, http.NoBody)
+func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
 		return nil, false, fmt.Errorf("create web page request %w", err)
 	}
@@ -165,8 +182,8 @@ func (c *Consumer) fetchWithLimit(httpCtx context.Context, seedURL string) (data
 		return nil, false, fmt.Errorf("make web page request %w", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
-	if res.StatusCode >= httpErrorStatusThreshold {
-		return nil, false, fmt.Errorf("unexpected status: %d", res.StatusCode)
+	if res.StatusCode >= minErrStatusCode {
+		return nil, false, &HTTPError{StatusCode: res.StatusCode}
 	}
 
 	if res.ContentLength > maxContentSize {

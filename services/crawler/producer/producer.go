@@ -4,18 +4,39 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"slices"
+	"strconv"
+	"time"
+
+	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
-	"github.com/segmentio/kafka-go"
 )
 
+const (
+	kafkaTimeout = 10 * time.Second
+)
+
+var permanentErrCodes = []int{
+	400, // Bad Request
+	401, // Unauthorised
+	403, // Forbidden
+	404, // Not Found
+	405, // Method Not Allowed
+	406, // Not Acceptable
+	410, // Gone
+	451, // Unavailable For Legal Reasons
+}
+
 type Producer struct {
-	writer *kafka.Writer // topic agnostic
-	ctx    context.Context
+	writer   *kafka.Writer // topic agnostic
+	kafkaCfg *config.Kafka
+	ctx      context.Context
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
-	if err := ensureTopics(kafkaCfg.DLQTopic); err != nil {
+	if err := ensureTopics(kafkaCfg.Broker, kafkaCfg.DLQTopic); err != nil {
 		return nil, fmt.Errorf("ensure kafka topics: %v", err)
 	}
 
@@ -25,36 +46,55 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 	}
 
 	return &Producer{
-		writer: writer,
-		ctx:    ctx,
+		writer:   writer,
+		ctx:      ctx,
+		kafkaCfg: kafkaCfg,
 	}, nil
 }
 
-// TODO: implement
-func PublishDLQ(msg *kafka.Message) error {
-	// TODO: manually add dlq topic to writer
-	return nil
+// non-HTTP error -> errCode = 0 -> always dlq
+func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
+	if slices.Contains(permanentErrCodes, errCode) {
+		// only publish transient errors
+		slog.Info("skipped producing", slog.Int("error code", errCode))
+		return
+	}
+
+	ctx := context.WithoutCancel(p.ctx)
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancelCtx()
+
+	failedMsg := kafka.Message{
+		Topic: p.kafkaCfg.DLQTopic,
+		Key:   msg.Key,
+		Value: msg.Value,
+	}
+
+	if err := p.writer.WriteMessages(writeCtx, failedMsg); err != nil {
+		// in prod env you would send an alert here
+		slog.Error("write message", slog.String("topic", p.kafkaCfg.DLQTopic), slog.Any("error", err))
+	} else {
+		slog.Info("producing to topic complete", slog.String("topic", p.kafkaCfg.DLQTopic))
+	}
 }
 
-// TODO: read
 func ensureTopics(broker string, topics ...string) error {
 	conn, err := kafka.Dial("tcp", broker)
 	if err != nil {
-		return fmt.Errorf("dial broker: %w", err)
+		return err
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
-	// Dial needs to reach the controller to create topics
 	controller, err := conn.Controller()
 	if err != nil {
-		return fmt.Errorf("get controller: %w", err)
+		return err
 	}
 
 	controllerConn, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
 	if err != nil {
-		return fmt.Errorf("dial controller: %w", err)
+		return err
 	}
-	defer controllerConn.Close()
+	defer controllerConn.Close() //nolint:errcheck
 
 	configs := make([]kafka.TopicConfig, len(topics))
 	for i, t := range topics {
