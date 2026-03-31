@@ -17,16 +17,13 @@ A distributed web crawler built with two Go microservices communicating via Apac
 
 This repository uses a multi-module structure with a Go workspace.
 
-/shared                  # reusable library code (e.g. config, common libraries, etc.)
-  go.mod
+`/shared/go.mod` - reusable library code (e.g. config, common libraries, etc.)
 
-/services/crawler        # crawler service
-  go.mod
+`/services/crawler/go.mod`
 
-/services/initialiser    # initialiser service
-  go.mod
+`/services/initialiser/go.mod`
 
-go.work                  # workspace definition (links modules together locally)
+`go.work` - workspace definition (links modules together locally)
 
 Each module manages its own dependencies independently.
 
