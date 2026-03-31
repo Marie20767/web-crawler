@@ -12,3 +12,6 @@ url-crawler
 *.tfplan
 *.tfstate
 *.tfstate.*
+
+# claude code
+REFLECTION_NEEDED.md
