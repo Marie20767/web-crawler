@@ -72,11 +72,11 @@ func run() error {
 	defer cancelCtx()
 
 	failedCount := 0
-	for _, url := range seedURLs {
+	for _, u := range seedURLs {
 		msgID := uuid.New()
 		msg := kafka.Message{
 			Key:   []byte(msgID.String()),
-			Value: []byte(url),
+			Value: []byte(u),
 		}
 
 		err := writer.WriteMessages(writeCtx, msg)
@@ -86,7 +86,7 @@ func run() error {
 			continue
 		}
 
-		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
+		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", u))
 	}
 
 	slog.Info("producing to topic complete",

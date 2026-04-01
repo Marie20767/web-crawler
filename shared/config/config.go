@@ -30,12 +30,12 @@ func LoadEnvVars(keys []string) (map[string]string, error) {
 	_ = godotenv.Load()
 
 	result := make(map[string]string, len(keys))
-	for _, key := range keys {
-		value := os.Getenv(key)
+	for _, k := range keys {
+		value := os.Getenv(k)
 		if value == "" {
-			return nil, fmt.Errorf("%s environment variable is not set", key)
+			return nil, fmt.Errorf("%s environment variable is not set", k)
 		}
-		result[key] = value
+		result[k] = value
 	}
 	return result, nil
 }

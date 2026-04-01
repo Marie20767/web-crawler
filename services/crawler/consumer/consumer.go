@@ -14,7 +14,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
-	"github.com/marie20767/web-crawler/services/crawler/objectstorage"
+	"github.com/marie20767/web-crawler/services/crawler/objstorage"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
 )
 
@@ -47,7 +47,7 @@ type Consumer struct {
 	httpClient  *http.Client
 	reader      *kafka.Reader
 	ctx         context.Context
-	objectStore *objectstorage.Store
+	objectStore *objstorage.Store
 	producer    *producer.Producer
 }
 
@@ -61,7 +61,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objectStore, err := objectstorage.New(ctx, awsCfg.BucketName, awsCfg.ObjectStorePrefix)
+	objectStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.ObjectStorePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -88,20 +88,20 @@ func (c *Consumer) Consume() error {
 
 	for range workerCount {
 		wg.Go(func() {
-			for msg := range jobs {
-				slog.Info("processing message", slog.String("id", string(msg.Key)))
-				if err := c.processMessage(&msg); err != nil {
+			for j := range jobs {
+				slog.Info("processing message", slog.String("id", string(j.Key)))
+				if err := c.processMessage(&j); err != nil {
 					slog.Error("process message", slog.Any("error", err))
-					var httpErr *HTTPError
+					var hErr *HTTPError
 					errStatusCode := 0
-					if errors.As(err, &httpErr) {
-						errStatusCode = httpErr.StatusCode
+					if errors.As(err, &hErr) {
+						errStatusCode = hErr.StatusCode
 					}
 
-					c.producer.PublishDLQ(&msg, errStatusCode)
+					c.producer.PublishDLQ(&j, errStatusCode)
 				}
 
-				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), msg); err != nil {
+				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), j); err != nil {
 					slog.Error("commit message offset", slog.Any("error", err))
 				}
 			}
