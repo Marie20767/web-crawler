@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Distributed web crawler with two Go microservices communicating via Kafka, storing output in AWS S3:
+Distributed web crawler with 3 Go microservices communicating via Kafka, storing raw HTML and parsed text in AWS S3:
 
 ```
 Initialiser → Kafka (init topic) → Crawler → AWS S3
@@ -14,7 +14,8 @@ Initialiser → Kafka (init topic) → Crawler → AWS S3
 
 - **Initialiser** (`services/initialiser/`): Produces seed URLs to Kafka. One-shot execution.
 - **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3, publishes `{ url: s3Link }` to parser topic.
-- **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0. Topics (`init`, `dlq`, `parser`) are created via a docker-init container on startup.
+- **Parser** (`services/parser/`): Fetches raw HTML from S3, parses text and URLs, stores parsed text in S3 and publishes new URLs to init topic 
+- **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0. Topics (`init`, `crawler-dlq`, `parser`, `parser-dlq`) are created via a docker-init container on startup.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
 Both services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` or producer logic).
@@ -23,7 +24,7 @@ Go workspaces are set up with shared config and `go.mod` files under `/shared`.
 
 ## Commands
 
-All commands are run from the relevant service directory (`services/crawler/` or `services/initialiser/`).
+All commands are run from the relevant service directory (`services/initialiser/` | `services/crawler/` | `services/parser`).
 
 ```bash
 # Run (crawler requires AWS SSO first: aws sso login --profile terraform)
