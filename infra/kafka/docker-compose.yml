@@ -15,7 +15,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
       interval: 10s
@@ -33,8 +33,10 @@ services:
     command:
       - |
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic init --partitions 1 --replication-factor 1 --if-not-exists
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic dlq --partitions 1 --replication-factor 1 --if-not-exists
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic crawler --partitions 1 --replication-factor 1 --if-not-exists
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic crawler-dlq --partitions 1 --replication-factor 1 --if-not-exists
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic parser --partitions 1 --replication-factor 1 --if-not-exists
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic parser-dlq --partitions 1 --replication-factor 1 --if-not-exists
     restart: "no"
 
   kafka-ui:
