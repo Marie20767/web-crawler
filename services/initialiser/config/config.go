@@ -7,8 +7,8 @@ import (
 )
 
 type Kafka struct {
-	Broker   string
-	URLTopic string
+	Broker    string
+	InitTopic string
 }
 
 type App struct {
@@ -20,7 +20,7 @@ func ParseEnv() (*App, error) {
 	envVars, err := sharedconfig.LoadEnvVars([]string{
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
-		"KAFKA_URL_TOPIC",
+		"KAFKA_INIT_TOPIC",
 	})
 	if err != nil {
 		return nil, err
@@ -34,8 +34,8 @@ func ParseEnv() (*App, error) {
 	return &App{
 		LogLevel: logLevel,
 		Kafka: &Kafka{
-			Broker:   envVars["KAFKA_BROKER"],
-			URLTopic: envVars["KAFKA_URL_TOPIC"],
+			Broker:    envVars["KAFKA_BROKER"],
+			InitTopic: envVars["KAFKA_INIT_TOPIC"],
 		},
 	}, nil
 }

@@ -54,7 +54,7 @@ type Consumer struct {
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{kafkaCfg.Broker},
-		Topic:   kafkaCfg.URLTopic,
+		Topic:   kafkaCfg.InitTopic,
 
 		GroupID:  "crawler",
 		MinBytes: kafkaMinBatchSize,
@@ -88,9 +88,9 @@ func (c *Consumer) Consume() error {
 
 	for range workerCount {
 		wg.Go(func() {
-			for j := range jobs {
-				slog.Info("processing message", slog.String("id", string(j.Key)))
-				if err := c.processMessage(&j); err != nil {
+			for job := range jobs {
+				slog.Info("processing message", slog.String("id", string(job.Key)))
+				if err := c.processMessage(&job); err != nil {
 					slog.Error("process message", slog.Any("error", err))
 					var hErr *HTTPError
 					errStatusCode := 0
@@ -98,10 +98,10 @@ func (c *Consumer) Consume() error {
 						errStatusCode = hErr.StatusCode
 					}
 
-					c.producer.PublishDLQ(&j, errStatusCode)
+					c.producer.PublishDLQ(&job, errStatusCode)
 				}
 
-				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), j); err != nil {
+				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
 					slog.Error("commit message offset", slog.Any("error", err))
 				}
 			}

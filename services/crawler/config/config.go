@@ -7,9 +7,10 @@ import (
 )
 
 type Kafka struct {
-	Broker   string
-	URLTopic string
-	DLQTopic string
+	Broker      string
+	InitTopic   string
+	DLQTopic    string
+	ParserTopic string
 }
 
 type AWS struct {
@@ -27,8 +28,9 @@ func ParseEnv() (*App, error) {
 	envVars, err := sharedconfig.LoadEnvVars([]string{
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
-		"KAFKA_URL_TOPIC",
+		"KAFKA_INIT_TOPIC",
 		"KAFKA_DLQ_TOPIC",
+		"KAFKA_PARSER_TOPIC",
 		"BUCKET_NAME",
 		"OBJECT_STORE_PREFIX",
 	})
@@ -44,9 +46,10 @@ func ParseEnv() (*App, error) {
 	return &App{
 		LogLevel: logLevel,
 		Kafka: &Kafka{
-			Broker:   envVars["KAFKA_BROKER"],
-			URLTopic: envVars["KAFKA_URL_TOPIC"],
-			DLQTopic: envVars["KAFKA_DLQ_TOPIC"],
+			Broker:      envVars["KAFKA_BROKER"],
+			InitTopic:   envVars["KAFKA_INIT_TOPIC"],
+			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
+			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 		},
 		AWS: &AWS{
 			BucketName:        envVars["BUCKET_NAME"],

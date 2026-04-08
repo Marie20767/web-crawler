@@ -66,31 +66,31 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.URLTopic)
+	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.InitTopic)
 	defer writer.Close() //nolint:errcheck
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 
 	failedCount := 0
-	for _, u := range seedURLs {
+	for _, url := range seedURLs {
 		msgID := uuid.New()
 		msg := kafka.Message{
 			Key:   []byte(msgID.String()),
-			Value: []byte(u),
+			Value: []byte(url),
 		}
 
 		err := writer.WriteMessages(writeCtx, msg)
 		if err != nil {
 			failedCount++
-			slog.Error("write message", slog.String("topic", cfg.Kafka.URLTopic), slog.Any("error", err))
+			slog.Error("write message", slog.String("topic", cfg.Kafka.InitTopic), slog.Any("error", err))
 			continue
 		}
 
-		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", u))
+		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
 	}
 
 	slog.Info("producing to topic complete",
-		slog.String("topic", cfg.Kafka.URLTopic),
+		slog.String("topic", cfg.Kafka.InitTopic),
 		slog.Int("total", len(seedURLs)),
 		slog.Int("failed", failedCount),
 	)
