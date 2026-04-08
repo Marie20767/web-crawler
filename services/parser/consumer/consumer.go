@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/segmentio/kafka-go"
+
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	"github.com/marie20767/web-crawler/shared/objstorage"
-	"github.com/segmentio/kafka-go"
 )
 
 const (
