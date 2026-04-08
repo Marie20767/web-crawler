@@ -7,15 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Distributed web crawler with two Go microservices communicating via Kafka, storing output in AWS S3:
 
 ```
-Initialiser → Kafka (url topic) → Crawler → AWS S3
+Initialiser → Kafka (init topic) → Crawler → AWS S3
+                                        ↓
+                                Kafka (parser topic) → Parser (planned)
 ```
 
 - **Initialiser** (`services/initialiser/`): Produces seed URLs to Kafka. One-shot execution.
-- **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3.
-- **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0, auto-creates the `url` topic on startup.
+- **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3, publishes `{ url: s3Link }` to parser topic.
+- **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0. Topics (`init`, `dlq`, `parser`) are created via a docker-init container on startup.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
 Both services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` or producer logic).
+
+Go workspaces are set up with shared config and `go.mod` files under `/shared`.
 
 ## Commands
 
@@ -60,11 +64,9 @@ GitHub Actions workflows trigger on PRs to `master` (build + lint) and pushes to
 
 ## Session Start Checklist
 
-Check if .claude/REFLECTION_NEEDED.md exists.
+Check if `.claude/REFLECTION_NEEDED.md` exists.
 
-If it does, read its contents and treat them as additional context for this session — patterns, friction, or decisions made outside Claude that should inform your understanding of the codebase.
-If the file has content beyond the title `Reflection Notes` and the session warrants it (significant work noted),
-incorporate it when running /reflection. After reading, delete the file so it doesn't accumulate stale entries.
+If it has content beyond the title `Reflection Notes`, update CLAUDE.md with any relevant architectural facts or decisions noted, then delete the file.
 If the file is empty or missing, continue normally.
 
 ## End-of-Session Habits

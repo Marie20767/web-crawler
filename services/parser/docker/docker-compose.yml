@@ -1,0 +1,12 @@
+services:
+  url-parser:
+    build:
+      context: ../../.. 
+      dockerfile: services/parser/docker/Dockerfile
+    container_name: url-parser
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    env_file:
+      .env.docker
+    restart: on-failure
