@@ -10,7 +10,6 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
-	"github.com/marie20767/web-crawler/shared/httperr"
 	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
@@ -61,15 +60,7 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(job.Key)))
 				if err := c.processMessage(&job); err != nil {
 					slog.Error("process message", slog.Any("error", err))
-					var hErr *httperr.Err
-					errStatusCode := 0
-					if errors.As(err, &hErr) {
-						errStatusCode = hErr.StatusCode
-					}
-
 					// TODO: publish to DLQ
-					slog.Info("code", errStatusCode)
-					// c.producer.PublishDLQ(&job, errStatusCode)
 				}
 
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
@@ -121,7 +112,7 @@ func (c *Consumer) Consume() error {
 }
 
 func (c *Consumer) processMessage(msg *kafka.Message) error {
-	slog.Info("msg", msg)
+	slog.String("key", string(msg.Key))
 	// TODO: check url exists in DB, if yes commit offset, if no run logic below
 
 	// TODO: fetch raw HTML from s3
