@@ -4,20 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
-)
-
-const (
-	workerCount = 10
-
-	kafkaTimeout      = 10 * time.Second
-	kafkaPollInterval = 30 * time.Second
-	kafkaMinBatchSize = 10e3 // 10KB
-	kafkaMaxBatchSize = 10e6 // 10MB
+	"github.com/marie20767/web-crawler/services/parser/consumer"
 )
 
 func main() {
@@ -42,9 +33,13 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	reader := newReader(cfg.Kafka.Broker, cfg.Kafka.ParserTopic)
+	cons, err := consumer.New(ctx, cfg.Kafka)
+	if err != nil {
+		return err
+	}
+	defer cons.Close()
 
-	return nil
+	return cons.Consume()
 }
 
 func newReader(broker, topic string) *kafka.Reader {
@@ -52,7 +47,7 @@ func newReader(broker, topic string) *kafka.Reader {
 		Brokers: []string{broker},
 		Topic:   topic,
 
-		GroupID:  "crawler",
+		GroupID:  "parser",
 		MinBytes: kafkaMinBatchSize,
 		MaxBytes: kafkaMaxBatchSize,
 	})
@@ -61,7 +56,6 @@ func newReader(broker, topic string) *kafka.Reader {
 func processMessages() {
 	// TODO: check url exists in DB, if yes commit offset, if no run logic below
 
-	
 	// TODO: loop through workers
 	// add to jobs channel
 	// read from jobs channel

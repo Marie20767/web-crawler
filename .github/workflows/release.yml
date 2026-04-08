@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        service: [initialiser, crawler]
+        service: [initialiser, crawler, parser]
 
     defaults:
       run:
