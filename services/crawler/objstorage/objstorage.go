@@ -31,7 +31,7 @@ func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
 	}, nil
 }
 
-func (s *Store) StoreHTML(ctx context.Context, messageID string, html []byte) error {
+func (s *Store) StoreHTML(ctx context.Context, messageID string, html []byte) (string, error) {
 	contentType := "text/html"
 	key := s.prefix + "/" + messageID
 
@@ -41,9 +41,9 @@ func (s *Store) StoreHTML(ctx context.Context, messageID string, html []byte) er
 		Body:        bytes.NewReader(html),
 		ContentType: &contentType,
 	}); err != nil {
-		return fmt.Errorf("upload HTML to object store %v", err)
+		return "", fmt.Errorf("upload HTML to object store %v", err)
 	}
 
 	slog.Info("successfully uploaded HTML to object store")
-	return nil
+	return fmt.Sprintf("s3://%s/%s", s.bucketName, key), nil
 }

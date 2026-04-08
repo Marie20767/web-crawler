@@ -36,7 +36,7 @@ type Producer struct {
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
-	if err := ensureTopics(kafkaCfg.Broker, kafkaCfg.DLQTopic); err != nil {
+	if err := ensureTopics(kafkaCfg.Broker, kafkaCfg.DLQTopic, kafkaCfg.ParserTopic); err != nil {
 		return nil, fmt.Errorf("ensure kafka topics: %v", err)
 	}
 
@@ -50,32 +50,6 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 		ctx:      ctx,
 		kafkaCfg: kafkaCfg,
 	}, nil
-}
-
-// non-HTTP error -> errCode = 0 -> always dlq
-func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
-	if slices.Contains(permanentErrCodes, errCode) {
-		// only publish transient errors
-		slog.Info("skipped producing", slog.Int("error code", errCode))
-		return
-	}
-
-	ctx := context.WithoutCancel(p.ctx)
-	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
-	defer cancelCtx()
-
-	failedMsg := kafka.Message{
-		Topic: p.kafkaCfg.DLQTopic,
-		Key:   msg.Key,
-		Value: msg.Value,
-	}
-
-	if err := p.writer.WriteMessages(writeCtx, failedMsg); err != nil {
-		// in prod env you would send an alert here
-		slog.Error("write message", slog.String("topic", p.kafkaCfg.DLQTopic), slog.Any("error", err))
-	} else {
-		slog.Info("producing to topic complete", slog.String("topic", p.kafkaCfg.DLQTopic))
-	}
 }
 
 func ensureTopics(broker string, topics ...string) error {
@@ -106,6 +80,40 @@ func ensureTopics(broker string, topics ...string) error {
 	}
 
 	return controllerConn.CreateTopics(configs...)
+}
+
+// non-HTTP error -> errCode = 0 -> always dlq
+func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
+	if slices.Contains(permanentErrCodes, errCode) {
+		// only publish transient errors
+		slog.Info("skipped producing", slog.Int("error code", errCode))
+		return
+	}
+
+	p.publish(msg.Key, msg.Value, p.kafkaCfg.DLQTopic)
+}
+
+func (p *Producer) PublishParser(url, storageLink string) {
+	p.publish([]byte(url), []byte(storageLink), p.kafkaCfg.ParserTopic)
+}
+
+func (p *Producer) publish(key, value []byte, topic string) {
+	ctx := context.WithoutCancel(p.ctx)
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancelCtx()
+
+	msg := kafka.Message{
+		Topic: topic,
+		Key:   key,
+		Value: value,
+	}
+
+	if err := p.writer.WriteMessages(writeCtx, msg); err != nil {
+		// in prod env you would send an alert here
+		slog.Error("write message", slog.String("topic", topic), slog.Any("error", err))
+	} else {
+		slog.Info("producing to topic complete", slog.String("topic", topic))
+	}
 }
 
 func (p *Producer) Close() {

@@ -168,7 +168,13 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return nil
 	}
 
-	return c.objectStore.StoreHTML(ctx, string(msg.Key), res)
+	link, err := c.objectStore.StoreHTML(ctx, string(msg.Key), res)
+	if err != nil {
+		return err
+	}
+
+	c.producer.PublishParser(parsedURL.String(), link)
+	return nil
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
