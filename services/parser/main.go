@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/segmentio/kafka-go"
-
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/consumer"
 )
@@ -33,34 +31,11 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	cons, err := consumer.New(ctx, cfg.Kafka)
+	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS)
 	if err != nil {
 		return err
 	}
 	defer cons.Close()
 
 	return cons.Consume()
-}
-
-func newReader(broker, topic string) *kafka.Reader {
-	return kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{broker},
-		Topic:   topic,
-
-		GroupID:  "parser",
-		MinBytes: kafkaMinBatchSize,
-		MaxBytes: kafkaMaxBatchSize,
-	})
-}
-
-func processMessages() {
-	// TODO: check url exists in DB, if yes commit offset, if no run logic below
-
-	// TODO: loop through workers
-	// add to jobs channel
-	// read from jobs channel
-	// fetch raw HTML from s3
-	// extract text & new urls
-	// save text to s3
-	// produce to init topic
 }

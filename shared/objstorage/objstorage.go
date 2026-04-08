@@ -11,12 +11,12 @@ import (
 )
 
 type Store struct {
-	client     *s3.Client
-	prefix     string
-	bucketName string
+	client       *s3.Client
+	bucketPrefix string
+	bucketName   string
 }
 
-func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
+func New(ctx context.Context, bucketName, bucketPrefix string) (*Store, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -25,15 +25,15 @@ func New(ctx context.Context, bucketName, prefix string) (*Store, error) {
 	client := s3.NewFromConfig(cfg)
 
 	return &Store{
-		client:     client,
-		prefix:     prefix,
-		bucketName: bucketName,
+		client:       client,
+		bucketPrefix: bucketPrefix,
+		bucketName:   bucketName,
 	}, nil
 }
 
-func (s *Store) StoreHTML(ctx context.Context, messageID string, html []byte) (string, error) {
+func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte) (string, error) {
 	contentType := "text/html"
-	key := s.prefix + "/" + messageID
+	key := s.bucketPrefix + "/" + messageID
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,

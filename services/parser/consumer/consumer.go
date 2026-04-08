@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
+	"github.com/marie20767/web-crawler/shared/objstorage"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -19,20 +20,31 @@ const (
 )
 
 type Consumer struct {
-	reader      *kafka.Reader
-	ctx         context.Context
-	objectStore *objstorage.Store
+	reader   *kafka.Reader
+	ctx      context.Context
+	objStore *objstorage.Store
 }
 
-func New(ctx context.Context, cfg *config.Kafka) (*kafka.Reader, error) {
-	return kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{cfg.Broker},
-		Topic:   cfg.ParserTopic,
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Consumer, error) {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{kafkaCfg.Broker},
+		Topic:   kafkaCfg.ParserTopic,
 
 		GroupID:  "parser",
 		MinBytes: kafkaMinBatchSize,
 		MaxBytes: kafkaMaxBatchSize,
-	}), nil
+	})
+
+	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Consumer{
+		reader:   reader,
+		ctx:      ctx,
+		objStore: objStore,
+	}, nil
 }
 
 func (c *Consumer) Consume() error {

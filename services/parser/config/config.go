@@ -12,9 +12,15 @@ type Kafka struct {
 	ParserTopic string
 }
 
+type AWS struct {
+	BucketPrefix string
+	BucketName   string
+}
+
 type App struct {
 	LogLevel slog.Level
 	Kafka    *Kafka
+	AWS      *AWS
 }
 
 func ParseEnv() (*App, error) {
@@ -23,6 +29,8 @@ func ParseEnv() (*App, error) {
 		"KAFKA_BROKER",
 		"KAFKA_INIT_TOPIC",
 		"KAFKA_PARSER_TOPIC",
+		"BUCKET_NAME",
+		"BUCKET_PREFIX",
 	})
 	if err != nil {
 		return nil, err
@@ -36,9 +44,13 @@ func ParseEnv() (*App, error) {
 	return &App{
 		LogLevel: logLevel,
 		Kafka: &Kafka{
-			Broker:    envVars["KAFKA_BROKER"],
-			InitTopic: envVars["KAFKA_INIT_TOPIC"],
+			Broker:      envVars["KAFKA_BROKER"],
+			InitTopic:   envVars["KAFKA_INIT_TOPIC"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
+		},
+		AWS: &AWS{
+			BucketName:   envVars["BUCKET_NAME"],
+			BucketPrefix: envVars["BUCKET_PREFIX"],
 		},
 	}, nil
 }

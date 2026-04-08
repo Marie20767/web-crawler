@@ -14,8 +14,8 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
-	"github.com/marie20767/web-crawler/services/crawler/objstorage"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
+	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
 const (
@@ -44,11 +44,11 @@ func (e *HTTPError) Error() string {
 }
 
 type Consumer struct {
-	httpClient  *http.Client
-	reader      *kafka.Reader
-	ctx         context.Context
-	objectStore *objstorage.Store
-	producer    *producer.Producer
+	httpClient *http.Client
+	reader     *kafka.Reader
+	ctx        context.Context
+	objStore   *objstorage.Store
+	producer   *producer.Producer
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
@@ -61,7 +61,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objectStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.ObjectStorePrefix)
+	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -76,9 +76,9 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 				IdleConnTimeout:     idleConnTimeout,
 			},
 		},
-		ctx:         ctx,
-		objectStore: objectStore,
-		producer:    prod,
+		ctx:      ctx,
+		objStore: objStore,
+		producer: prod,
 	}, nil
 }
 
@@ -168,7 +168,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return nil
 	}
 
-	link, err := c.objectStore.StoreHTML(ctx, string(msg.Key), res)
+	link, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
 	if err != nil {
 		return err
 	}
