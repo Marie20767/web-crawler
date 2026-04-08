@@ -9,4 +9,6 @@ services:
         condition: service_completed_successfully
     env_file:
       .env.docker
+    volumes:
+      - ~/.aws:/home/parser/.aws:ro
     restart: on-failure

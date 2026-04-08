@@ -2,3 +2,4 @@ include:
   - infra/kafka/docker-compose.yml
   - services/initialiser/docker/docker-compose.yml
   - services/crawler/docker/docker-compose.yml
+  - services/parser/docker/docker-compose.yml

@@ -1,6 +1,6 @@
 GIT_HASH := $(shell git rev-parse --short HEAD)
 DOCKER_USER := marie20767
-IMAGE_NAME := url-initialiser
+IMAGE_NAME := url-parser
 PROJECT_ROOT := $(shell git rev-parse --show-toplevel)/
 
 dep:
@@ -24,7 +24,7 @@ build:
 	CGO_ENABLED=0 \
 	GOOS=linux \
 	GOARCH=amd64 \
-	go build -o url-initialiser .
+	go build -o url-parser .
 
 docker/local-build:
 	DOCKER_BUILDKIT=1 docker buildx build \
