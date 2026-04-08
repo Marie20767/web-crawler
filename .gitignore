@@ -6,6 +6,7 @@ bin/
 # go binaries
 url-initialiser
 url-crawler
+url-parser
 
 # Terraform files
 .terraform/

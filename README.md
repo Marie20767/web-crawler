@@ -1,6 +1,6 @@
 ## Distributed Web Crawler
 
-A distributed web crawler built with two Go microservices communicating via Apache Kafka, storing crawled HTML in AWS S3.
+A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3.
 
 ### Stack
 
@@ -19,13 +19,17 @@ This repository uses a multi-module structure with a Go workspace.
 
 `/shared/go.mod` - reusable library code (e.g. config, common libraries, etc.)
 
+`/services/initialiser/go.mod`
+
 `/services/crawler/go.mod`
 
-`/services/initialiser/go.mod`
+`/services/parser/go.mod`
 
 `go.work` - workspace definition (links modules together locally)
 
 Each module manages its own dependencies independently.
+
+See `/.claude/CLAUDE.md` for more details on the repo structure.
 
 ### Development
 
@@ -36,20 +40,20 @@ The crawler requires AWS SSO authentication before running:
 aws sso login --profile terraform
 ```
 
-#### Run full stack (Kafka + both services)
+#### Run full stack with Docker
 ```bash
 make up
 ```
 
-#### Run services individually
+#### Run services individually without Docker
 
-Kafka must be running first:
+Kafka is always running via Docker and must be running first:
 ```bash
 cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
 ```
 
-Then from `services/initialiser/` or `services/crawler/`:
+Then from `services/initialiser/` | `services/crawler/` | `services/parser`:
 ```bash
 make run
 ```

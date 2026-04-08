@@ -17,6 +17,8 @@ jobs:
             image_name: url-initialiser
           - service: crawler
             image_name: url-crawler
+          - service: parser
+            image_name: url-parser
 
     steps:
       - uses: actions/checkout@v4
