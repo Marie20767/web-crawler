@@ -41,9 +41,9 @@ func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte)
 		Body:        bytes.NewReader(html),
 		ContentType: &contentType,
 	}); err != nil {
-		return "", fmt.Errorf("upload HTML to object store %v", err)
+		return "", fmt.Errorf("upload raw HTML to object store %v", err)
 	}
 
-	slog.Info("successfully uploaded HTML to object store")
+	slog.Info("successfully uploaded raw HTML to object store")
 	return fmt.Sprintf("s3://%s/%s", s.bucketName, key), nil
 }
