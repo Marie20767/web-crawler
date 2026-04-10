@@ -151,20 +151,15 @@ func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
 	var sb strings.Builder
 	urls := []string{}
 
-	var walk func(n *html.Node, sb strings.Builder) string
-	walk = func(n *html.Node, sb strings.Builder) string {
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
 		if n.Parent != nil {
 			switch n.Type {
 			case html.TextNode:
-				fmt.Println(">>> is text")
 				switch n.Parent.Data {
 				case "script", "style":
 				// skip
 				default:
-					fmt.Println(">>> adding to sb")
-					s := strings.TrimSpace(n.Data)
-					fmt.Println(">>> data: ", n.Data)
-					fmt.Println(">>> text: ", s)
 					sb.WriteString(strings.TrimSpace(n.Data))
 				}
 
@@ -172,28 +167,23 @@ func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
 				switch n.Data {
 				case "a", "link":
 					for _, attr := range n.Attr {
-						fmt.Printf("%+v\n", attr)
-						if attr.Key == "href" || attr.Key == "src" {
+						if attr.Key == "href" {
 							urls = append(urls, attr.Val)
 						}
 					}
-				default:
-					// skip
 				}
 			}
 		}
 
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walk(child, sb)
+			walk(child)
 		}
-
-		return sb.String()
 	}
 
-	parsedText := walk(doc, sb)
+	walk(doc)
 
 	return &Parsed{
-		text: parsedText,
+		text: sb.String(),
 		urls: urls,
 	}, nil
 }
