@@ -52,7 +52,7 @@ func ParseEnv() (*App, error) {
 		AWS: &AWS{
 			BucketName:       envVars["BUCKET_NAME"],
 			HTMLBucketPrefix: envVars["HTML_BUCKET_PREFIX"],
-			TextBucketPrefix: envVars["TEXT_BUCKET_PREFIX",],
+			TextBucketPrefix: envVars["TEXT_BUCKET_PREFIX"],
 		},
 	}, nil
 }
