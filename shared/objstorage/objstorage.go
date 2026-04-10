@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+const (
+	objStoreURLPrefix = "s3://"
 )
 
 type Store struct {
@@ -45,5 +51,36 @@ func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte)
 	}
 
 	slog.Info("successfully uploaded raw HTML to object store")
-	return fmt.Sprintf("s3://%s/%s", s.bucketName, key), nil
+	return fmt.Sprintf("%s%s/%s", objStoreURLPrefix, s.bucketName, key), nil
+}
+
+func (s *Store) FetchRawHTML(ctx context.Context, url string) ([]byte, error) {
+	bucket, key := s.getBucketAndKey(url)
+
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("fetch raw HTML from object store %v", err)
+	}
+	defer out.Body.Close()
+
+	raw, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response %v", err)
+	}
+
+	return raw, nil
+}
+
+func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
+	path := strings.TrimPrefix(objStoreURL, objStoreURLPrefix)
+	firstSlashI := strings.Index(path, "/")
+
+	bucket = path[:firstSlashI]
+	key = path[firstSlashI+1:]
+
+	return bucket, key
 }
