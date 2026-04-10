@@ -102,7 +102,6 @@ func newWriter(broker, topic string) *kafka.Writer {
 	return &kafka.Writer{
 		Addr:         kafka.TCP(broker),
 		Topic:        topic,
-		Balancer:     &kafka.LeastBytes{},
 		RequiredAcks: kafka.RequireOne,
 		MaxAttempts:  kafkaMaxAttempts,
 	}

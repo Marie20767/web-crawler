@@ -86,7 +86,7 @@ func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
 	return bucket, key
 }
 
-func (s *Store) StoreParsedText(ctx context.Context, text, messageID string) error {
+func (s *Store) StoreParsedText(ctx context.Context, messageID, text string) error {
 	contentType := "text/plain"
 	key := s.textPrefix + "/" + messageID
 
