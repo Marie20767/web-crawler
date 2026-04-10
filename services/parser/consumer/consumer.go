@@ -23,9 +23,9 @@ const (
 )
 
 type Consumer struct {
-	reader       *kafka.Reader
-	ctx          context.Context
-	objStore     *objstorage.Store
+	reader   *kafka.Reader
+	ctx      context.Context
+	objStore *objstorage.Store
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Consumer, error) {
