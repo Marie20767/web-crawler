@@ -1,13 +1,17 @@
 package consumer
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/shared/objstorage"
@@ -38,7 +42,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Cons
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix)
+	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.HTMLBucketPrefix, awsCfg.TextBucketPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -111,23 +115,87 @@ func (c *Consumer) Consume() error {
 	}
 }
 
+type Parsed struct {
+	text string
+	urls []string
+}
+
 func (c *Consumer) processMessage(msg *kafka.Message) error {
 	// TODO: check url exists in DB, if yes commit offset, if no run logic below
 	ctx := context.WithoutCancel(c.ctx)
 
-	_, err := c.objStore.FetchRawHTML(ctx, string(msg.Value))
+	raw, err := c.objStore.FetchRawHTML(ctx, string(msg.Value))
 	if err != nil {
 		return err
 	}
 
-	slog.Info("successfully fetched HTML from object store")
+	parsed, _ := c.parseRawHTML(raw)
 
-	// TODO:
-	// extract text & new urls
-	// save text to s3
-	// produce to init topic
+	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsed.text)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%+v\n", parsed)
+	// TODO: produce urls to init topic
 
 	return nil
+}
+
+func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
+	doc, err := html.Parse(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+
+	var sb strings.Builder
+	urls := []string{}
+
+	var walk func(n *html.Node, sb strings.Builder) string
+	walk = func(n *html.Node, sb strings.Builder) string {
+		if n.Parent != nil {
+			switch n.Type {
+			case html.TextNode:
+				fmt.Println(">>> is text")
+				switch n.Parent.Data {
+				case "script", "style":
+				// skip
+				default:
+					fmt.Println(">>> adding to sb")
+					s := strings.TrimSpace(n.Data)
+					fmt.Println(">>> data: ", n.Data)
+					fmt.Println(">>> text: ", s)
+					sb.WriteString(strings.TrimSpace(n.Data))
+				}
+
+			case html.ElementNode:
+				switch n.Data {
+				case "a", "link":
+					for _, attr := range n.Attr {
+						fmt.Printf("%+v\n", attr)
+						if attr.Key == "href" || attr.Key == "src" {
+							urls = append(urls, attr.Val)
+						}
+					}
+				default:
+					// skip
+				}
+			}
+		}
+
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			walk(child, sb)
+		}
+
+		return sb.String()
+	}
+
+	parsedText := walk(doc, sb)
+
+	return &Parsed{
+		text: parsedText,
+		urls: urls,
+	}, nil
 }
 
 func (c *Consumer) Close() {

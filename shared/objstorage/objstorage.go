@@ -12,17 +12,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const (
-	objStoreURLPrefix = "s3://"
-)
+const objStoreURLPrefix = "s3://"
 
 type Store struct {
-	client       *s3.Client
-	bucketPrefix string
-	bucketName   string
+	client     *s3.Client
+	htmlPrefix string
+	textPrefix string
+	bucketName string
 }
 
-func New(ctx context.Context, bucketName, bucketPrefix string) (*Store, error) {
+func New(ctx context.Context, bucketName, htmlPrefix, textPrefix string) (*Store, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -31,15 +30,16 @@ func New(ctx context.Context, bucketName, bucketPrefix string) (*Store, error) {
 	client := s3.NewFromConfig(cfg)
 
 	return &Store{
-		client:       client,
-		bucketPrefix: bucketPrefix,
-		bucketName:   bucketName,
+		client:     client,
+		bucketName: bucketName,
+		htmlPrefix: htmlPrefix,
+		textPrefix: textPrefix,
 	}, nil
 }
 
 func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte) (string, error) {
 	contentType := "text/html"
-	key := s.bucketPrefix + "/" + messageID
+	key := s.htmlPrefix + "/" + messageID
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
@@ -72,6 +72,7 @@ func (s *Store) FetchRawHTML(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("read response %v", err)
 	}
 
+	slog.Info("successfully fetched HTML from object store")
 	return raw, nil
 }
 
@@ -83,4 +84,21 @@ func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
 	key = path[firstSlashI+1:]
 
 	return bucket, key
+}
+
+func (s *Store) StoreParsedText(ctx context.Context, text, messageID string) error {
+	contentType := "text/plain"
+	key := s.textPrefix + "/" + messageID
+
+	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      &s.bucketName,
+		Key:         &key,
+		Body:        strings.NewReader(text),
+		ContentType: &contentType,
+	}); err != nil {
+		return fmt.Errorf("upload parsed text to object store %v", err)
+	}
+
+	slog.Info("successfully uploaded parsed text to object store")
+	return nil
 }

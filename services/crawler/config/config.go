@@ -52,7 +52,7 @@ func ParseEnv() (*App, error) {
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 		},
 		AWS: &AWS{
-			BucketName:   envVars["BUCKET_NAME"],
+			BucketName:       envVars["BUCKET_NAME"],
 			BucketPrefix: envVars["BUCKET_PREFIX"],
 		},
 	}, nil

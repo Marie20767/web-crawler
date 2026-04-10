@@ -61,7 +61,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		MaxBytes: kafkaMaxBatchSize,
 	})
 
-	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix)
+	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix, "")
 	if err != nil {
 		return nil, err
 	}
