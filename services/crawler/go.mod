@@ -32,5 +32,5 @@ require (
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 )

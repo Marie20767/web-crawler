@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
+	"github.com/marie20767/web-crawler/services/parser/producer"
+	"github.com/marie20767/web-crawler/shared/httperr"
 	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
@@ -30,9 +32,10 @@ type Consumer struct {
 	reader   *kafka.Reader
 	ctx      context.Context
 	objStore *objstorage.Store
+	producer *producer.Producer
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Consumer, error) {
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{kafkaCfg.Broker},
 		Topic:   kafkaCfg.ParserTopic,
@@ -51,6 +54,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Cons
 		reader:   reader,
 		ctx:      ctx,
 		objStore: objStore,
+		producer: prod,
 	}, nil
 }
 
@@ -64,7 +68,13 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(job.Key)))
 				if err := c.processMessage(&job); err != nil {
 					slog.Error("process message", slog.Any("error", err))
-					// TODO: publish to DLQ
+					var hErr *httperr.Err
+					errStatusCode := 0
+					if errors.As(err, &hErr) {
+						errStatusCode = hErr.StatusCode
+					}
+
+					c.producer.PublishDLQ(&job, errStatusCode)
 				}
 
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
@@ -136,8 +146,9 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	fmt.Printf("%+v\n", parsed)
-	// TODO: produce urls to init topic
+	for _, url := range parsed.urls {
+		c.producer.PublishInit(uuid.New().String(), url)
+	}
 
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/consumer"
+	"github.com/marie20767/web-crawler/services/parser/producer"
 )
 
 func main() {
@@ -31,7 +32,13 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS)
+	prod, err := producer.New(ctx, cfg.Kafka)
+	if err != nil {
+		return err
+	}
+	defer prod.Close()
+
+	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS, prod)
 	if err != nil {
 		return err
 	}
