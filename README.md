@@ -35,10 +35,8 @@ See `/.claude/CLAUDE.md` for more details on the repo structure.
 
 #### Prerequisites
 
-The crawler requires AWS SSO authentication before running:
-```bash
-aws sso login --profile terraform
-```
+Crawler & parser services require AWS SSO authentication. 
+Just follow the login steps on the browser window that automatically opens when running the app.
 
 #### Run full stack with Docker
 ```bash

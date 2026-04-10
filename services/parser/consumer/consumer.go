@@ -23,9 +23,9 @@ const (
 )
 
 type Consumer struct {
-	reader   *kafka.Reader
-	ctx      context.Context
-	objStore *objstorage.Store
+	reader       *kafka.Reader
+	ctx          context.Context
+	objStore     *objstorage.Store
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS) (*Consumer, error) {
@@ -112,10 +112,15 @@ func (c *Consumer) Consume() error {
 }
 
 func (c *Consumer) processMessage(msg *kafka.Message) error {
-	slog.String("key", string(msg.Key))
 	// TODO: check url exists in DB, if yes commit offset, if no run logic below
+	ctx := context.WithoutCancel(c.ctx)
 
-	// TODO: fetch raw HTML from s3
+	_, err := c.objStore.FetchRawHTML(ctx, string(msg.Value))
+	if err != nil {
+		return err
+	}
+
+	slog.Info("successfully fetched HTML from object store")
 
 	// TODO:
 	// extract text & new urls
