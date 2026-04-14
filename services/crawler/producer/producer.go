@@ -36,6 +36,6 @@ func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
 	p.Publish(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) PublishParser(url, storageURL string) {
-	p.Publish([]byte(url), []byte(storageURL), p.cfg.ParserTopic)
+func (p *Producer) PublishParser(messageID, storageURL string) {
+	p.Publish([]byte(messageID), []byte(storageURL), p.cfg.ParserTopic)
 }

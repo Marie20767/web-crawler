@@ -173,7 +173,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	c.producer.PublishParser(parsedURL.String(), link)
+	c.producer.PublishParser(string(msg.Key), link)
 	return nil
 }
 

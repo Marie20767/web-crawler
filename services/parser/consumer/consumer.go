@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -131,7 +133,6 @@ type Parsed struct {
 }
 
 func (c *Consumer) processMessage(msg *kafka.Message) error {
-	// TODO: check url exists in DB, if yes commit offset, if no run logic below
 	ctx := context.WithoutCancel(c.ctx)
 
 	raw, err := c.objStore.FetchRawHTML(ctx, string(msg.Value))
@@ -175,10 +176,9 @@ func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
 				}
 
 			case html.ElementNode:
-				switch n.Data {
-				case "a", "link":
+				if n.Data == "a" {
 					for _, attr := range n.Attr {
-						if attr.Key == "href" {
+						if attr.Key == "href" && !isResourceURL(attr.Val) {
 							urls = append(urls, attr.Val)
 						}
 					}
@@ -203,4 +203,19 @@ func (c *Consumer) Close() {
 	if err := c.reader.Close(); err != nil {
 		slog.Error("close consumer", slog.Any("error", err))
 	}
+}
+
+func isResourceURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	switch strings.ToLower(path.Ext(parsed.Path)) {
+	case ".css", ".woff", ".woff2", ".ttf", ".eot", ".otf",
+		".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp":
+		return true
+	}
+
+	return false
 }
