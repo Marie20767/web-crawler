@@ -3,7 +3,9 @@ package consumer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 	"path"
@@ -18,6 +20,7 @@ import (
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
 	"github.com/marie20767/web-crawler/shared/httperr"
+	"github.com/marie20767/web-crawler/shared/kafka/message"
 	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
@@ -135,26 +138,36 @@ type Parsed struct {
 func (c *Consumer) processMessage(msg *kafka.Message) error {
 	ctx := context.WithoutCancel(c.ctx)
 
-	raw, err := c.objStore.FetchRawHTML(ctx, string(msg.Value))
+	var parserMsg message.ParserMessage
+	if err := json.Unmarshal(msg.Value, &parserMsg); err != nil {
+		return fmt.Errorf("unmarshal parser message: %w", err)
+	}
+
+	baseURL, err := url.Parse(parserMsg.PageURL)
+	if err != nil {
+		return fmt.Errorf("parse page URL: %w", err)
+	}
+
+	rawHTML, err := c.objStore.FetchRawHTML(ctx, parserMsg.StorageURL)
 	if err != nil {
 		return err
 	}
 
-	parsed, _ := c.parseRawHTML(raw)
+	parsed, _ := c.parseRawHTML(rawHTML, baseURL)
 
 	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsed.text)
 	if err != nil {
 		return err
 	}
 
-	for _, url := range parsed.urls {
-		c.producer.PublishInit(uuid.New().String(), url)
+	for _, u := range parsed.urls {
+		c.producer.PublishInit(uuid.New().String(), u)
 	}
 
 	return nil
 }
 
-func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
+func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, err error) {
 	doc, err := html.Parse(bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
@@ -178,9 +191,23 @@ func (c *Consumer) parseRawHTML(raw []byte) (parsed *Parsed, err error) {
 			case html.ElementNode:
 				if n.Data == "a" {
 					for _, attr := range n.Attr {
-						if attr.Key == "href" && !isResourceURL(attr.Val) {
-							urls = append(urls, attr.Val)
+						if attr.Key != "href" || isResourceURL(attr.Val) {
+							continue
 						}
+
+						parsed, err := url.Parse(attr.Val)
+						if err != nil {
+							continue
+						}
+
+						switch parsed.Scheme {
+						case "", "http", "https":
+						default:
+							continue
+						}
+
+						resolved := baseURL.ResolveReference(parsed)
+						urls = append(urls, resolved.String())
 					}
 				}
 			}

@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"slices"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
+	"github.com/marie20767/web-crawler/shared/kafka/message"
 )
 
 type Producer struct {
@@ -36,6 +38,15 @@ func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
 	p.Publish(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) PublishParser(messageID, storageURL string) {
-	p.Publish([]byte(messageID), []byte(storageURL), p.cfg.ParserTopic)
+func (p *Producer) PublishParser(messageID, pageURL, storageURL string) {
+	payload, err := json.Marshal(message.ParserMessage{
+		PageURL:    pageURL,
+		StorageURL: storageURL,
+	})
+	if err != nil {
+		slog.Error("marshal parser message", slog.Any("error", err))
+		return
+	}
+
+	p.Publish([]byte(messageID), payload, p.cfg.ParserTopic)
 }

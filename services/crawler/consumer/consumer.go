@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
+	"github.com/marie20767/web-crawler/shared/httperr"
 	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
@@ -34,14 +36,6 @@ const (
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
 )
-
-type HTTPError struct {
-	StatusCode int
-}
-
-func (e *HTTPError) Error() string {
-	return fmt.Sprintf("unexpected status: %d", e.StatusCode)
-}
 
 type Consumer struct {
 	httpClient *http.Client
@@ -92,7 +86,7 @@ func (c *Consumer) Consume() error {
 				slog.Info("processing message", slog.String("id", string(job.Key)))
 				if err := c.processMessage(&job); err != nil {
 					slog.Error("process message", slog.Any("error", err))
-					var hErr *HTTPError
+					var hErr *httperr.Err
 					errStatusCode := 0
 					if errors.As(err, &hErr) {
 						errStatusCode = hErr.StatusCode
@@ -160,6 +154,13 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	ctx := context.WithoutCancel(c.ctx)
 
+	// prevent SSRF attacks
+	if private, err := isPrivateHost(parsedURL.Hostname()); err != nil {
+		return fmt.Errorf("resolve host %q: %w", parsedURL.Hostname(), err)
+	} else if private {
+		return fmt.Errorf("blocked request to private host: %q", parsedURL.Hostname())
+	}
+
 	res, skipped, err := c.fetchWithLimit(ctx, parsedURL.String())
 	if err != nil {
 		return err
@@ -168,12 +169,12 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return nil
 	}
 
-	link, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
+	storageLink, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
 	if err != nil {
 		return err
 	}
 
-	c.producer.PublishParser(string(msg.Key), link)
+	c.producer.PublishParser(string(msg.Key), parsedURL.String(), storageLink)
 	return nil
 }
 
@@ -189,7 +190,7 @@ func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []b
 	}
 	defer res.Body.Close() //nolint:errcheck
 	if res.StatusCode >= minErrStatusCode {
-		return nil, false, &HTTPError{StatusCode: res.StatusCode}
+		return nil, false, &httperr.Err{StatusCode: res.StatusCode}
 	}
 
 	if res.ContentLength > maxContentSize {
@@ -217,4 +218,49 @@ func (c *Consumer) Close() {
 	if err := c.reader.Close(); err != nil {
 		slog.Error("close consumer", slog.Any("error", err))
 	}
+}
+
+// privateIPRanges covers loopback, link-local (incl. AWS metadata at 169.254.169.254),
+// and RFC-1918 private ranges for both IPv4 and IPv6.
+var privateIPRanges = func() []*net.IPNet {
+	blocks := []string{
+		"127.0.0.0/8",    // IPv4 loopback
+		"169.254.0.0/16", // IPv4 link-local
+		"10.0.0.0/8",     // RFC-1918
+		"172.16.0.0/12",  // RFC-1918
+		"192.168.0.0/16", // RFC-1918
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // IPv6 unique local
+		"fe80::/10",      // IPv6 link-local
+	}
+
+	ranges := make([]*net.IPNet, len(blocks))
+	for i, block := range blocks {
+		_, ipNet, _ := net.ParseCIDR(block)
+		ranges[i] = ipNet
+	}
+
+	return ranges
+}()
+
+func isPrivateHost(hostname string) (bool, error) {
+	addrs, err := net.LookupHost(hostname)
+	if err != nil {
+		return false, err
+	}
+
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			continue
+		}
+
+		for _, block := range privateIPRanges {
+			if block.Contains(ip) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
