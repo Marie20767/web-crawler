@@ -33,7 +33,6 @@ services:
     command:
       - |
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic init --partitions 1 --replication-factor 1 --if-not-exists
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic crawler --partitions 1 --replication-factor 1 --if-not-exists
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic crawler-dlq --partitions 1 --replication-factor 1 --if-not-exists
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic parser --partitions 1 --replication-factor 1 --if-not-exists
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --topic parser-dlq --partitions 1 --replication-factor 1 --if-not-exists
