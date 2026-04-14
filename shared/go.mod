@@ -1,11 +1,12 @@
 module github.com/marie20767/web-crawler/shared
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.2
 	github.com/joho/godotenv v1.5.1
+	github.com/segmentio/kafka-go v0.4.50
 )
 
 require (
@@ -26,4 +27,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9 // indirect
 	github.com/aws/smithy-go v1.24.2 // indirect
+	github.com/klauspost/compress v1.15.9 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
+	golang.org/x/net v0.53.0 // indirect
 )

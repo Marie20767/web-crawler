@@ -10,11 +10,13 @@ type Kafka struct {
 	Broker      string
 	ParserTopic string
 	DLQTopic    string
+	InitTopic   string
 }
 
 type AWS struct {
-	BucketPrefix string
-	BucketName   string
+	HTMLBucketPrefix string
+	TextBucketPrefix string
+	BucketName       string
 }
 
 type App struct {
@@ -28,8 +30,11 @@ func ParseEnv() (*App, error) {
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
 		"KAFKA_PARSER_TOPIC",
+		"KAFKA_DLQ_TOPIC",
+		"KAFKA_INIT_TOPIC",
 		"BUCKET_NAME",
-		"BUCKET_PREFIX",
+		"HTML_BUCKET_PREFIX",
+		"TEXT_BUCKET_PREFIX",
 	})
 	if err != nil {
 		return nil, err
@@ -46,10 +51,12 @@ func ParseEnv() (*App, error) {
 			Broker:      envVars["KAFKA_BROKER"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
+			InitTopic:   envVars["KAFKA_INIT_TOPIC"],
 		},
 		AWS: &AWS{
-			BucketName:   envVars["BUCKET_NAME"],
-			BucketPrefix: envVars["BUCKET_PREFIX"],
+			BucketName:       envVars["BUCKET_NAME"],
+			HTMLBucketPrefix: envVars["HTML_BUCKET_PREFIX"],
+			TextBucketPrefix: envVars["TEXT_BUCKET_PREFIX"],
 		},
 	}, nil
 }
