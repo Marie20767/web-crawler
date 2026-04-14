@@ -10,8 +10,8 @@ import (
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/shared/httperr"
-	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
 	"github.com/marie20767/web-crawler/shared/kafka/message"
+	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
 )
 
 type Producer struct {

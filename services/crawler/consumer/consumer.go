@@ -154,8 +154,8 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	ctx := context.WithoutCancel(c.ctx)
 
-	// prevent SSRF attacks
-	if private, err := isPrivateHost(parsedURL.Hostname()); err != nil {
+	// prevent SSRF attacks (malicious page embeds links to internal network addresses)
+	if private, err := isPrivateHost(ctx, parsedURL.Hostname()); err != nil {
 		return fmt.Errorf("resolve host %q: %w", parsedURL.Hostname(), err)
 	} else if private {
 		return fmt.Errorf("blocked request to private host: %q", parsedURL.Hostname())
@@ -243,8 +243,8 @@ var privateIPRanges = func() []*net.IPNet {
 	return ranges
 }()
 
-func isPrivateHost(hostname string) (bool, error) {
-	addrs, err := net.LookupHost(hostname)
+func isPrivateHost(ctx context.Context, hostname string) (bool, error) {
+	addrs, err := net.DefaultResolver.LookupHost(ctx, hostname)
 	if err != nil {
 		return false, err
 	}
