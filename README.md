@@ -29,6 +29,8 @@ This repository uses a multi-module structure with a Go workspace.
 
 Each module manages its own dependencies independently.
 
+Run `go work sync` after running `go get` or modifying `go.mod` in a workspace module.
+
 See `/.claude/CLAUDE.md` for more details on the repo structure.
 
 ### Development
@@ -51,25 +53,28 @@ cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
 ```
 
-Then from `services/initialiser/` | `services/crawler/` | `services/parser`:
+Then from `services/initialiser` | `services/crawler` | `services/parser`:
 ```bash
 make run
 ```
 
 #### Lint
+
+From `services/initialiser` | `services/crawler` | `services/parser` run:
 ```bash
 make lint        # install + run
 make lint/fix    # auto-fix
 ```
 
 #### Build (Linux x86_64 binary)
+From `services/initialiser` | `services/crawler` | `services/parser` run:
 ```bash
 make build
 ```
 
 ### Infrastructure
 
-Terraform config is in `infra/terraform/`. Requires `aws sso login --profile terraform` before applying.
+Terraform config is in `infra/terraform`. Requires `aws sso login --profile terraform` before applying.
 
 ### CI/CD
 
