@@ -208,7 +208,8 @@ func (c *Consumer) Close() {
 func isResourceURL(rawURL string) bool {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return false
+		slog.Error("isResourceURL: parse URL", slog.Any("error", err))
+		return true
 	}
 
 	switch strings.ToLower(path.Ext(parsed.Path)) {
