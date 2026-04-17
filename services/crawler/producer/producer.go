@@ -20,7 +20,7 @@ type Producer struct {
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
-	prod, err := sharedproducer.New(ctx, kafkaCfg.Broker, kafkaCfg.DLQTopic, kafkaCfg.ParserTopic)
+	prod, err := sharedproducer.New(ctx, kafkaCfg.Broker)
 	if err != nil {
 		return nil, err
 	}

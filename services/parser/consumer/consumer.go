@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 	"golang.org/x/net/html"
 
@@ -153,19 +152,17 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	parsed, err := c.parseRawHTML(rawHTML, baseURL)
+	parsedRes, err := c.parseRawHTML(rawHTML, baseURL)
 	if err != nil {
 		return err
 	}
 
-	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsed.text)
+	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsedRes.text)
 	if err != nil {
 		return err
 	}
 
-	for _, u := range parsed.urls {
-		c.producer.ProduceInit(uuid.New().String(), u)
-	}
+	c.producer.ProduceSeedURLs(parsedRes.urls)
 
 	return nil
 }
