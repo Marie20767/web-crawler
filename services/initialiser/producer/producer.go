@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+
 	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
 )
 
@@ -56,7 +57,7 @@ func New(ctx context.Context, broker, topic string) (*Producer, error) {
 func (p *Producer) ProduceSeedURLs() error {
 	for _, url := range seedURLs {
 		msgID := uuid.New().String()
-		err := p.Producer.Produce([]byte(msgID), []byte(url), p.topic)
+		err := p.Produce([]byte(msgID), []byte(url), p.topic)
 
 		if err != nil {
 			return err
