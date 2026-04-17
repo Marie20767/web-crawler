@@ -34,16 +34,16 @@ func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
 		return
 	}
 
-	p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
+	_ = p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
 const seedURLsBatchSize = 100
 
-func (p *Producer) ProduceSeedURLs(urls []string) {
+func (p *Producer) ProduceSeedURLs(urls []string) error {
 	for i := 0; i < len(urls); i += seedURLsBatchSize {
 		chunk := urls[i:min(i+seedURLsBatchSize, len(urls))]
 
-		msgs := make([]kafka.Message, len(chunk))
+		msgs := make([]kafka.Message, 0, len(chunk))
 		for _, url := range chunk {
 			msgs = append(msgs, kafka.Message{
 				Topic: p.cfg.InitTopic,
@@ -52,7 +52,11 @@ func (p *Producer) ProduceSeedURLs(urls []string) {
 			})
 		}
 
-		p.Producer.ProduceBatch(msgs, p.cfg.InitTopic)
+		err := p.Producer.ProduceBatch(msgs, p.cfg.InitTopic)
+		if err != nil {
+			return err
+		}
 	}
 
+	return nil
 }

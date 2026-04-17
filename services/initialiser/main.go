@@ -36,7 +36,5 @@ func run() error {
 		return err
 	}
 	defer prod.Close()
-	prod.ProduceSeedURLs()
-
-	return nil
+	return prod.ProduceSeedURLs()
 }

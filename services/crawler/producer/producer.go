@@ -3,6 +3,7 @@ package producer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"slices"
 
@@ -35,18 +36,18 @@ func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
 		return
 	}
 
-	p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
+	_ = p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) ProduceParser(messageID, pageURL, storageURL string) {
+func (p *Producer) ProduceParser(messageID, pageURL, storageURL string) error {
 	payload, err := json.Marshal(message.ParserMessage{
 		PageURL:    pageURL,
 		StorageURL: storageURL,
 	})
 	if err != nil {
 		slog.Error("marshal parser message", slog.Any("error", err))
-		return
+		return fmt.Errorf("marshal parser message %v", err)
 	}
 
-	p.Produce([]byte(messageID), payload, p.cfg.ParserTopic)
+	return p.Produce([]byte(messageID), payload, p.cfg.ParserTopic)
 }

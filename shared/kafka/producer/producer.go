@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -44,22 +45,25 @@ func (p *Producer) Produce(key, value []byte, topic string) error {
 
 	if err := p.writer.WriteMessages(writeCtx, msg); err != nil {
 		slog.Error("produce message", slog.String("topic", topic), slog.Any("error", err))
-		return err
+		return fmt.Errorf("produce message to topic %s %v", topic, err)
 	}
+
 	slog.Info("producing message complete", slog.String("topic", topic))
 	return nil
 }
 
-func (p *Producer) ProduceBatch(msgs []kafka.Message, topic string) {
+func (p *Producer) ProduceBatch(msgs []kafka.Message, topic string) error {
 	ctx := context.WithoutCancel(p.ctx)
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 
 	if err := p.writer.WriteMessages(writeCtx, msgs...); err != nil {
 		slog.Error("produce messages", slog.String("topic", topic), slog.Any("error", err))
+		return fmt.Errorf("produce messages to topic %s %v", topic, err)
 	}
 
 	slog.Info("producing messages complete", slog.String("topic", topic))
+	return nil
 }
 
 func (p *Producer) Close() {

@@ -174,8 +174,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	c.producer.ProduceParser(string(msg.Key), parsedURL.String(), storageLink)
-	return nil
+	return c.producer.ProduceParser(string(msg.Key), parsedURL.String(), storageLink)
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {

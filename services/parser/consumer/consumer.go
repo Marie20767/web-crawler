@@ -162,9 +162,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	c.producer.ProduceSeedURLs(parsedRes.urls)
-
-	return nil
+	return c.producer.ProduceSeedURLs(parsedRes.urls)
 }
 
 func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, err error) {

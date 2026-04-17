@@ -2,7 +2,6 @@ package producer
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/google/uuid"
 	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
@@ -54,18 +53,15 @@ func New(ctx context.Context, broker, topic string) (*Producer, error) {
 	}, nil
 }
 
-func (p *Producer) ProduceSeedURLs() {
-	failedCount := 0
-
+func (p *Producer) ProduceSeedURLs() error {
 	for _, url := range seedURLs {
 		msgID := uuid.New().String()
 		err := p.Producer.Produce([]byte(msgID), []byte(url), p.topic)
 
 		if err != nil {
-			failedCount++
-			continue
+			return err
 		}
 	}
 
-	slog.Info("failed messages", slog.Int("count", failedCount))
+	return nil
 }
