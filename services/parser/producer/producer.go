@@ -27,15 +27,15 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 }
 
 // non-HTTP error -> errCode = 0 -> always dlq
-func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
+func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
 	if slices.Contains(httperr.PermanentErrCodes, errCode) {
 		slog.Info("skipped producing", slog.Int("error code", errCode))
 		return
 	}
 
-	p.Publish(msg.Key, msg.Value, p.cfg.DLQTopic)
+	p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) PublishInit(msgID, url string) {
-	p.Publish([]byte(msgID), []byte(url), p.cfg.InitTopic)
+func (p *Producer) ProduceInit(msgID, url string) {
+	p.Produce([]byte(msgID), []byte(url), p.cfg.InitTopic)
 }

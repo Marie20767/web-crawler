@@ -29,16 +29,16 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 }
 
 // non-HTTP error -> errCode = 0 -> always dlq
-func (p *Producer) PublishDLQ(msg *kafka.Message, errCode int) {
+func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
 	if slices.Contains(httperr.PermanentErrCodes, errCode) {
 		slog.Info("skipped producing", slog.Int("error code", errCode))
 		return
 	}
 
-	p.Publish(msg.Key, msg.Value, p.cfg.DLQTopic)
+	p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) PublishParser(messageID, pageURL, storageURL string) {
+func (p *Producer) ProduceParser(messageID, pageURL, storageURL string) {
 	payload, err := json.Marshal(message.ParserMessage{
 		PageURL:    pageURL,
 		StorageURL: storageURL,
@@ -48,5 +48,5 @@ func (p *Producer) PublishParser(messageID, pageURL, storageURL string) {
 		return
 	}
 
-	p.Publish([]byte(messageID), payload, p.cfg.ParserTopic)
+	p.Produce([]byte(messageID), payload, p.cfg.ParserTopic)
 }

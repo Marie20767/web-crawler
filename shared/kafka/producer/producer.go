@@ -68,7 +68,7 @@ func ensureTopics(broker string, topics ...string) error {
 	return controllerConn.CreateTopics(configs...)
 }
 
-func (p *Producer) Publish(key, value []byte, topic string) {
+func (p *Producer) Produce(key, value []byte, topic string) {
 	ctx := context.WithoutCancel(p.ctx)
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()

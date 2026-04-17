@@ -79,7 +79,7 @@ func (c *Consumer) Consume() error {
 						errStatusCode = hErr.StatusCode
 					}
 
-					c.producer.PublishDLQ(&job, errStatusCode)
+					c.producer.ProduceDLQ(&job, errStatusCode)
 				}
 
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
@@ -140,12 +140,12 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	var parserMsg message.ParserMessage
 	if err := json.Unmarshal(msg.Value, &parserMsg); err != nil {
-		return fmt.Errorf("unmarshal parser message: %w", err)
+		return fmt.Errorf("unmarshal parser message: v", err)
 	}
 
 	baseURL, err := url.Parse(parserMsg.PageURL)
 	if err != nil {
-		return fmt.Errorf("parse page URL: %w", err)
+		return fmt.Errorf("parse page URL: %v", err)
 	}
 
 	rawHTML, err := c.objStore.FetchRawHTML(ctx, parserMsg.StorageURL)
@@ -153,7 +153,10 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	parsed, _ := c.parseRawHTML(rawHTML, baseURL)
+	parsed, err := c.parseRawHTML(rawHTML, baseURL)
+	if err != nil {
+		return err
+	}
 
 	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsed.text)
 	if err != nil {
@@ -161,7 +164,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	}
 
 	for _, u := range parsed.urls {
-		c.producer.PublishInit(uuid.New().String(), u)
+		c.producer.ProduceInit(uuid.New().String(), u)
 	}
 
 	return nil
@@ -170,7 +173,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, err error) {
 	doc, err := html.Parse(bytes.NewReader(raw))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse raw HTML %v", err)
 	}
 
 	var sb strings.Builder
@@ -185,28 +188,34 @@ func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, e
 				case "script", "style":
 				// skip
 				default:
-					sb.WriteString(strings.TrimSpace(n.Data))
+					text := strings.TrimSpace(n.Data)
+					if text != "" {
+						if sb.Len() > 0 {
+							sb.WriteByte(' ')
+						}
+						sb.WriteString(text)
+					}
 				}
 
 			case html.ElementNode:
 				if n.Data == "a" {
 					for _, attr := range n.Attr {
-						if attr.Key != "href" || isResourceURL(attr.Val) {
-							continue
-						}
-
-						parsed, err := url.Parse(attr.Val)
+						parsedHref, err := url.Parse(attr.Val)
 						if err != nil {
 							continue
 						}
 
-						switch parsed.Scheme {
+						if attr.Key != "href" || isResourceURL(parsedHref) {
+							continue
+						}
+
+						switch parsedHref.Scheme {
 						case "", "http", "https":
 						default:
 							continue
 						}
 
-						resolved := baseURL.ResolveReference(parsed)
+						resolved := baseURL.ResolveReference(parsedHref)
 						urls = append(urls, resolved.String())
 					}
 				}
@@ -232,14 +241,8 @@ func (c *Consumer) Close() {
 	}
 }
 
-func isResourceURL(rawURL string) bool {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		slog.Error("isResourceURL: parse URL", slog.Any("error", err))
-		return true
-	}
-
-	switch strings.ToLower(path.Ext(parsed.Path)) {
+func isResourceURL(url *url.URL) bool {
+	switch strings.ToLower(path.Ext(url.Path)) {
 	case ".css", ".woff", ".woff2", ".ttf", ".eot", ".otf",
 		".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp":
 		return true

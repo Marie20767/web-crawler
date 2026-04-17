@@ -92,7 +92,7 @@ func (c *Consumer) Consume() error {
 						errStatusCode = hErr.StatusCode
 					}
 
-					c.producer.PublishDLQ(&job, errStatusCode)
+					c.producer.ProduceDLQ(&job, errStatusCode)
 				}
 
 				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
@@ -156,7 +156,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	// prevent SSRF attacks (malicious page embeds links to internal network addresses)
 	if private, err := isPrivateHost(ctx, parsedURL.Hostname()); err != nil {
-		return fmt.Errorf("resolve host %q: %w", parsedURL.Hostname(), err)
+		return fmt.Errorf("resolve host %q: %v", parsedURL.Hostname(), err)
 	} else if private {
 		return fmt.Errorf("blocked request to private host: %q", parsedURL.Hostname())
 	}
@@ -174,19 +174,19 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	c.producer.PublishParser(string(msg.Key), parsedURL.String(), storageLink)
+	c.producer.ProduceParser(string(msg.Key), parsedURL.String(), storageLink)
 	return nil
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
-		return nil, false, fmt.Errorf("create web page request %w", err)
+		return nil, false, fmt.Errorf("create web page request %v", err)
 	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, false, fmt.Errorf("make web page request %w", err)
+		return nil, false, fmt.Errorf("make web page request %v", err)
 	}
 	defer res.Body.Close() //nolint:errcheck
 	if res.StatusCode >= minErrStatusCode {
@@ -203,7 +203,7 @@ func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []b
 	data, err = io.ReadAll(limited)
 
 	if err != nil {
-		return nil, false, fmt.Errorf("read response: %w", err)
+		return nil, false, fmt.Errorf("read response: %v", err)
 	}
 
 	if int64(len(data)) > maxContentSize {

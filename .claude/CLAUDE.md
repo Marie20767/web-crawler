@@ -13,8 +13,8 @@ Initialiser → Kafka (init topic) → Crawler → AWS S3
 ```
 
 - **Initialiser** (`services/initialiser/`): Produces seed URLs to Kafka. One-shot execution.
-- **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3, publishes `{ url: s3URL }` to parser topic.
-- **Parser** (`services/parser/`): Fetches raw HTML from S3, extracts text and URLs, stores parsed text in S3 and publishes new URLs to init topic 
+- **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML (2MB limit, 30s timeout), stores in S3, produces `{ url: s3URL }` to parser topic.
+- **Parser** (`services/parser/`): Fetches raw HTML from S3, extracts text and URLs, stores parsed text in S3 and produces new URLs to init topic 
 - **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0. Topics (`init`, `crawler-dlq`, `parser`, `parser-dlq`) are created via a docker-init container on startup.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
