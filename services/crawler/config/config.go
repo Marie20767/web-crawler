@@ -11,6 +11,7 @@ type Kafka struct {
 	InitTopic   string
 	DLQTopic    string
 	ParserTopic string
+	Partitions  string
 }
 
 type AWS struct {
@@ -31,6 +32,7 @@ func ParseEnv() (*App, error) {
 		"KAFKA_INIT_TOPIC",
 		"KAFKA_DLQ_TOPIC",
 		"KAFKA_PARSER_TOPIC",
+		"KAFKA_PARTITIONS",
 		"BUCKET_NAME",
 		"BUCKET_PREFIX",
 	})
@@ -50,6 +52,7 @@ func ParseEnv() (*App, error) {
 			InitTopic:   envVars["KAFKA_INIT_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
+			Partitions:  envVars["KAFKA_PARTITIONS"],
 		},
 		AWS: &AWS{
 			BucketName:   envVars["BUCKET_NAME"],

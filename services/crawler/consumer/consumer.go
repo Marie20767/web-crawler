@@ -9,10 +9,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
@@ -39,21 +41,30 @@ const (
 
 type Consumer struct {
 	httpClient *http.Client
-	reader     *kafka.Reader
+	readers    []*kafka.Reader
 	ctx        context.Context
 	objStore   *objstorage.Store
 	producer   *producer.Producer
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{kafkaCfg.Broker},
-		Topic:   kafkaCfg.InitTopic,
+	partitions, err := strconv.Atoi(kafkaCfg.Partitions)
+	if err != nil {
+		return nil, err
+	}
 
-		GroupID:  "crawler",
-		MinBytes: kafkaMinBatchSize,
-		MaxBytes: kafkaMaxBatchSize,
-	})
+	readers := make([]*kafka.Reader, 0, partitions)
+	for range partitions {
+		reader := kafka.NewReader(kafka.ReaderConfig{
+			Brokers:  []string{kafkaCfg.Broker},
+			Topic:    kafkaCfg.InitTopic,
+			GroupID:  "crawler",
+			MinBytes: kafkaMinBatchSize,
+			MaxBytes: kafkaMaxBatchSize,
+		})
+
+		readers = append(readers, reader)
+	}
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix, "")
 	if err != nil {
@@ -61,7 +72,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 	}
 
 	return &Consumer{
-		reader: reader,
+		readers: readers,
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 			Transport: &http.Transport{
@@ -76,38 +87,38 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 	}, nil
 }
 
-func (c *Consumer) Consume() error {
-	jobs := make(chan kafka.Message, workerCount)
-	var wg sync.WaitGroup
+type job struct {
+	msg    kafka.Message
+	reader *kafka.Reader
+}
 
+func (c *Consumer) Consume() error {
+	jobs := make(chan job, workerCount)
+
+	var wg sync.WaitGroup
 	for range workerCount {
 		wg.Go(func() {
-			for job := range jobs {
-				slog.Info("processing message", slog.String("id", string(job.Key)))
-				if err := c.processMessage(&job); err != nil {
-					slog.Error("process message", slog.Any("error", err))
-					var hErr *httperr.Err
-					errStatusCode := 0
-					if errors.As(err, &hErr) {
-						errStatusCode = hErr.StatusCode
-					}
-
-					c.producer.ProduceDLQ(&job, errStatusCode)
-				}
-
-				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
-					slog.Error("commit message offset", slog.Any("error", err))
-				}
-			}
+			c.processMessages(jobs)
 		})
 	}
 
 	defer wg.Wait()
 	defer close(jobs)
 
+	errGrp, errGrpCtx := errgroup.WithContext(c.ctx)
+	for _, reader := range c.readers {
+		errGrp.Go(func() error {
+			return c.fetchMessages(errGrpCtx, reader, jobs)
+		})
+	}
+
+	return errGrp.Wait()
+}
+
+func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs chan<- job) error {
 	for {
-		readCtx, cancel := context.WithTimeout(c.ctx, kafkaTimeout)
-		msg, err := c.reader.FetchMessage(readCtx)
+		readCtx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+		msg, err := reader.FetchMessage(readCtx)
 		cancel()
 
 		if err != nil {
@@ -116,7 +127,7 @@ func (c *Consumer) Consume() error {
 
 				slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
 				select {
-				case <-c.ctx.Done():
+				case <-ctx.Done():
 					timer.Stop()
 					slog.Info("context cancelled")
 					return nil
@@ -135,10 +146,30 @@ func (c *Consumer) Consume() error {
 		}
 
 		select {
-		case jobs <- msg:
-		case <-c.ctx.Done():
+		case jobs <- job{msg: msg, reader: reader}:
+		case <-ctx.Done():
 			slog.Warn("context cancelled, dropping unqueued message", slog.String("id", string(msg.Key)))
 			return nil
+		}
+	}
+}
+
+func (c *Consumer) processMessages(jobs <-chan job) {
+	for job := range jobs {
+		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
+		if err := c.processMessage(&job.msg); err != nil {
+			slog.Error("process message", slog.Any("error", err))
+			var hErr *httperr.Err
+			errStatusCode := 0
+			if errors.As(err, &hErr) {
+				errStatusCode = hErr.StatusCode
+			}
+
+			c.producer.ProduceDLQ(&job.msg, errStatusCode)
+		}
+
+		if err := job.reader.CommitMessages(context.WithoutCancel(c.ctx), job.msg); err != nil {
+			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
 }
@@ -214,9 +245,12 @@ func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []b
 }
 
 func (c *Consumer) Close() {
-	if err := c.reader.Close(); err != nil {
-		slog.Error("close consumer", slog.Any("error", err))
+	for _, reader := range c.readers {
+		if err := reader.Close(); err != nil {
+			slog.Error("close consumer", slog.Any("error", err))
+		}
 	}
+
 }
 
 // privateIPRanges covers loopback, link-local (incl. AWS metadata at 169.254.169.254),
