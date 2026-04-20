@@ -17,6 +17,21 @@ resource "aws_s3_bucket" "crawler_data" {
   bucket = "my-web-crawler-data-dev"
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "crawler_data" {
+  bucket = aws_s3_bucket.crawler_data.id
+
+  rule {
+    id     = "expire-all-objects"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 1
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "crawler_data" {
   bucket = aws_s3_bucket.crawler_data.id
 
