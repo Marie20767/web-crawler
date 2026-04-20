@@ -45,7 +45,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
 			Topic:    kafkaCfg.ParserTopic,
-			GroupID:  "parser",
+			GroupID:  kafkaCfg.GroupID,
 			MinBytes: kafkaMinBatchSize,
 			MaxBytes: kafkaMaxBatchSize,
 		})

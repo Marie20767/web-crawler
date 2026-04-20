@@ -51,7 +51,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
 			Topic:    kafkaCfg.InitTopic,
-			GroupID:  "crawler",
+			GroupID:  kafkaCfg.GroupID,
 			MinBytes: kafkaMinBatchSize,
 			MaxBytes: kafkaMaxBatchSize,
 		})
@@ -276,6 +276,7 @@ func isPrivateHost(ctx context.Context, hostname string) (bool, error) {
 	for _, addr := range addrs {
 		ip := net.ParseIP(addr)
 		if ip == nil {
+			slog.Warn("unparsable DNS address", slog.String("ip", ip.String()))
 			continue
 		}
 
