@@ -20,8 +20,8 @@ type Producer struct {
 	cfg *config.Kafka
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
-	prod, err := sharedproducer.New(ctx, kafkaCfg.Broker)
+func New(kafkaCfg *config.Kafka) (*Producer, error) {
+	prod, err := sharedproducer.New(kafkaCfg.Broker)
 	if err != nil {
 		return nil, err
 	}
@@ -30,16 +30,16 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 }
 
 // non-HTTP error -> errCode = 0 -> always dlq
-func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
+func (p *Producer) ProduceDLQ(ctx context.Context, msg *kafka.Message, errCode int) {
 	if slices.Contains(httperr.PermanentErrCodes, errCode) {
 		slog.Info("skipped producing", slog.Int("error code", errCode))
 		return
 	}
 
-	_ = p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
+	_ = p.Produce(ctx, msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) ProduceParser(messageID, pageURL, storageURL string) error {
+func (p *Producer) ProduceParser(ctx context.Context, messageID, pageURL, storageURL string) error {
 	payload, err := json.Marshal(message.ParserMessage{
 		PageURL:    pageURL,
 		StorageURL: storageURL,
@@ -49,5 +49,5 @@ func (p *Producer) ProduceParser(messageID, pageURL, storageURL string) error {
 		return fmt.Errorf("marshal parser message %v", err)
 	}
 
-	return p.Produce([]byte(messageID), payload, p.cfg.ParserTopic)
+	return p.Produce(ctx, []byte(messageID), payload, p.cfg.ParserTopic)
 }

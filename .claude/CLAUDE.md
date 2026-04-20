@@ -26,7 +26,7 @@ Go workspaces are set up with shared config and `go.mod` files under `/shared`.
 
 ## Commands
 
-All commands are run from the relevant service directory (`services/initialiser/` | `services/crawler/` | `services/parser`).
+All commands are run from the relevant service directory (`services/initialiser/` | `services/crawler/` | `services/parser` | `shared/`).
 
 ```bash
 # Run (crawler requires AWS SSO first: aws sso login --profile terraform)
@@ -76,7 +76,7 @@ If the file is empty or missing, continue normally.
 
 - at the end of any session that involved significant debugging, new patterns, architectural decisions, or workflow friction, run `/reflection` before closing. If unsure whether the session qualifies, run it anyway.
 
-- after any session that touches files under `services/` — whether modifying, fixing, or reviewing — run `make lint` and `make build` from the affected service directory. Fix any errors before finishing.
+- after any session that touches files under `services/` — whether modifying, fixing, or reviewing — run `make lint` and `make build` from the affected service directory. Fix any errors before finishing. If the session touches files under `shared/`, run `make lint` from the shared directory and fix any errors before finishing.
 
 ## Important to note
 

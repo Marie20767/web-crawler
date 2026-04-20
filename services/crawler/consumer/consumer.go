@@ -6,26 +6,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
 	"github.com/marie20767/web-crawler/shared/httperr"
+	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/objstorage"
 )
 
 const (
-	workerCount = 10
-
-	kafkaTimeout      = 10 * time.Second
-	kafkaPollInterval = 30 * time.Second
 	kafkaMinBatchSize = 10e3 // 10KB
 	kafkaMaxBatchSize = 10e6 // 10MB
 
@@ -39,9 +33,8 @@ const (
 )
 
 type Consumer struct {
+	*sharedconsumer.Consumer
 	httpClient *http.Client
-	readers    []*kafka.Reader
-	ctx        context.Context
 	objStore   *objstorage.Store
 	producer   *producer.Producer
 }
@@ -49,15 +42,13 @@ type Consumer struct {
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
 	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
 	for range kafkaCfg.Partitions {
-		reader := kafka.NewReader(kafka.ReaderConfig{
+		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
 			Topic:    kafkaCfg.InitTopic,
-			GroupID:  "crawler",
+			GroupID:  kafkaCfg.GroupID,
 			MinBytes: kafkaMinBatchSize,
 			MaxBytes: kafkaMaxBatchSize,
-		})
-
-		readers = append(readers, reader)
+		}))
 	}
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix, "")
@@ -66,7 +57,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 	}
 
 	return &Consumer{
-		readers: readers,
+		Consumer: sharedconsumer.New(readers),
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 			Transport: &http.Transport{
@@ -75,115 +66,35 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 				IdleConnTimeout:     idleConnTimeout,
 			},
 		},
-		ctx:      ctx,
 		objStore: objStore,
 		producer: prod,
 	}, nil
 }
 
-type job struct {
-	msg    kafka.Message
-	reader *kafka.Reader
+func (c *Consumer) Consume(ctx context.Context) error {
+	return c.Consumer.Consume(ctx, c.handle)
 }
 
-func (c *Consumer) Consume() error {
-	jobs := make(chan job, workerCount)
-
-	var wg sync.WaitGroup
-	for range workerCount {
-		wg.Go(func() {
-			c.processMessages(jobs)
-		})
+func (c *Consumer) handle(ctx context.Context, msg *kafka.Message) error {
+	err := c.processMessage(ctx, msg)
+	if err != nil {
+		var hErr *httperr.Err
+		errStatusCode := 0
+		if errors.As(err, &hErr) {
+			errStatusCode = hErr.StatusCode
+		}
+		c.producer.ProduceDLQ(ctx, msg, errStatusCode)
 	}
-
-	defer wg.Wait()
-	defer close(jobs)
-
-	errGrp, errGrpCtx := errgroup.WithContext(c.ctx)
-	for _, reader := range c.readers {
-		errGrp.Go(func() error {
-			return c.fetchMessages(errGrpCtx, reader, jobs)
-		})
-	}
-
-	return errGrp.Wait()
+	return err
 }
 
-func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs chan<- job) error {
-	for {
-		readCtx, cancel := context.WithTimeout(ctx, kafkaTimeout)
-		msg, err := reader.FetchMessage(readCtx)
-		cancel()
-
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				timer := time.NewTimer(kafkaPollInterval)
-
-				slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					slog.Info("context cancelled")
-					return nil
-				case <-timer.C:
-					continue
-				}
-			}
-
-			if errors.Is(err, context.Canceled) {
-				slog.Info("context cancelled")
-				return nil
-			}
-
-			slog.Error("consume from topic", slog.Any("error", err))
-			return err
-		}
-
-		select {
-		case jobs <- job{reader: reader, msg: msg}:
-		case <-ctx.Done():
-			slog.Warn("context cancelled, dropping unqueued message", slog.String("id", string(msg.Key)))
-			return nil
-		}
-	}
-}
-
-func (c *Consumer) processMessages(jobs <-chan job) {
-	for job := range jobs {
-		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
-		if err := c.processMessage(&job.msg); err != nil {
-			slog.Error("process message", slog.Any("error", err))
-			var hErr *httperr.Err
-			errStatusCode := 0
-			if errors.As(err, &hErr) {
-				errStatusCode = hErr.StatusCode
-			}
-
-			c.producer.ProduceDLQ(&job.msg, errStatusCode)
-		}
-
-		if err := job.reader.CommitMessages(context.WithoutCancel(c.ctx), job.msg); err != nil {
-			slog.Error("commit message offset", slog.Any("error", err))
-		}
-	}
-}
-
-func (c *Consumer) processMessage(msg *kafka.Message) error {
+func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error {
 	parsedURL, err := url.Parse(string(msg.Value))
 	if err != nil {
 		return err
 	}
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("invalid URL: %q", string(msg.Value))
-	}
-
-	ctx := context.WithoutCancel(c.ctx)
-
-	// prevent SSRF attacks (malicious page embeds links to internal network addresses)
-	if private, err := isPrivateHost(ctx, parsedURL.Hostname()); err != nil {
-		return fmt.Errorf("resolve host %q: %v", parsedURL.Hostname(), err)
-	} else if private {
-		return fmt.Errorf("blocked request to private host: %q", parsedURL.Hostname())
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme: %q", parsedURL.Scheme)
 	}
 
 	res, skipped, err := c.fetchWithLimit(ctx, parsedURL.String())
@@ -199,7 +110,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	return c.producer.ProduceParser(string(msg.Key), parsedURL.String(), storageLink)
+	return c.producer.ProduceParser(ctx, string(msg.Key), parsedURL.String(), storageLink)
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
@@ -236,57 +147,4 @@ func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []b
 	}
 
 	return data, false, nil
-}
-
-func (c *Consumer) Close() {
-	for _, reader := range c.readers {
-		if err := reader.Close(); err != nil {
-			slog.Error("close consumer", slog.Any("error", err))
-		}
-	}
-}
-
-// privateIPRanges covers loopback, link-local (incl. AWS metadata at 169.254.169.254),
-// and RFC-1918 private ranges for both IPv4 and IPv6.
-var privateIPRanges = func() []*net.IPNet {
-	blocks := []string{
-		"127.0.0.0/8",    // IPv4 loopback
-		"169.254.0.0/16", // IPv4 link-local
-		"10.0.0.0/8",     // RFC-1918
-		"172.16.0.0/12",  // RFC-1918
-		"192.168.0.0/16", // RFC-1918
-		"::1/128",        // IPv6 loopback
-		"fc00::/7",       // IPv6 unique local
-		"fe80::/10",      // IPv6 link-local
-	}
-
-	ranges := make([]*net.IPNet, len(blocks))
-	for i, block := range blocks {
-		_, ipNet, _ := net.ParseCIDR(block)
-		ranges[i] = ipNet
-	}
-
-	return ranges
-}()
-
-func isPrivateHost(ctx context.Context, hostname string) (bool, error) {
-	addrs, err := net.DefaultResolver.LookupHost(ctx, hostname)
-	if err != nil {
-		return false, err
-	}
-
-	for _, addr := range addrs {
-		ip := net.ParseIP(addr)
-		if ip == nil {
-			continue
-		}
-
-		for _, block := range privateIPRanges {
-			if block.Contains(ip) {
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
 }

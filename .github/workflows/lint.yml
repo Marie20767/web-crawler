@@ -30,3 +30,24 @@ jobs:
           version: v2.5.0
           args: --timeout 5m
           working-directory: services/${{ matrix.service }}
+
+  lint-shared:
+    name: Lint shared
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'shared/go.mod'
+          cache: true
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+          args: --timeout 5m
+          working-directory: shared

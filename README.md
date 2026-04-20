@@ -72,14 +72,14 @@ make run
 
 #### Lint
 
-From `services/initialiser` | `services/crawler` | `services/parser` run:
+From `services/initialiser` | `services/crawler` | `services/parser` | `shared/` run:
 ```bash
 make lint        # install + run
 make lint/fix    # auto-fix
 ```
 
 #### Build (Linux x86_64 binary)
-From `services/initialiser` | `services/crawler` | `services/parser` run:
+From `services/initialiser` | `services/crawler` | `services/parser` | `shared/` run:
 ```bash
 make build
 ```

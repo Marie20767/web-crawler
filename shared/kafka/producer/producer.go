@@ -16,10 +16,9 @@ const (
 
 type Producer struct {
 	writer *kafka.Writer
-	ctx    context.Context
 }
 
-func New(ctx context.Context, broker string) (*Producer, error) {
+func New(broker string) (*Producer, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(broker),
 		RequiredAcks: kafka.RequireOne,
@@ -28,12 +27,10 @@ func New(ctx context.Context, broker string) (*Producer, error) {
 
 	return &Producer{
 		writer: writer,
-		ctx:    ctx,
 	}, nil
 }
 
-func (p *Producer) Produce(key, value []byte, topic string) error {
-	ctx := context.WithoutCancel(p.ctx)
+func (p *Producer) Produce(ctx context.Context, key, value []byte, topic string) error {
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 
@@ -52,8 +49,7 @@ func (p *Producer) Produce(key, value []byte, topic string) error {
 	return nil
 }
 
-func (p *Producer) ProduceBatch(msgs []kafka.Message, topic string) error {
-	ctx := context.WithoutCancel(p.ctx)
+func (p *Producer) ProduceBatch(ctx context.Context, msgs []kafka.Message, topic string) error {
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 

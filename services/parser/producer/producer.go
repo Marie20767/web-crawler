@@ -18,8 +18,8 @@ type Producer struct {
 	cfg *config.Kafka
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
-	prod, err := sharedproducer.New(ctx, kafkaCfg.Broker)
+func New(kafkaCfg *config.Kafka) (*Producer, error) {
+	prod, err := sharedproducer.New(kafkaCfg.Broker)
 	if err != nil {
 		return nil, err
 	}
@@ -28,18 +28,18 @@ func New(ctx context.Context, kafkaCfg *config.Kafka) (*Producer, error) {
 }
 
 // non-HTTP error -> errCode = 0 -> always dlq
-func (p *Producer) ProduceDLQ(msg *kafka.Message, errCode int) {
+func (p *Producer) ProduceDLQ(ctx context.Context, msg *kafka.Message, errCode int) {
 	if slices.Contains(httperr.PermanentErrCodes, errCode) {
 		slog.Info("skipped producing", slog.Int("error code", errCode))
 		return
 	}
 
-	_ = p.Produce(msg.Key, msg.Value, p.cfg.DLQTopic)
+	_ = p.Produce(ctx, msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
 const seedURLsBatchSize = 100
 
-func (p *Producer) ProduceSeedURLs(urls []string) error {
+func (p *Producer) ProduceSeedURLs(ctx context.Context, urls []string) error {
 	for i := 0; i < len(urls); i += seedURLsBatchSize {
 		chunk := urls[i:min(i+seedURLsBatchSize, len(urls))]
 
@@ -52,7 +52,7 @@ func (p *Producer) ProduceSeedURLs(urls []string) error {
 			})
 		}
 
-		err := p.ProduceBatch(msgs, p.cfg.InitTopic)
+		err := p.ProduceBatch(ctx, msgs, p.cfg.InitTopic)
 		if err != nil {
 			return err
 		}

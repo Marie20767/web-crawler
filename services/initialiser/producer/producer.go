@@ -41,8 +41,8 @@ type Producer struct {
 	broker string
 }
 
-func New(ctx context.Context, broker, topic string) (*Producer, error) {
-	prod, err := sharedproducer.New(ctx, broker)
+func New(broker, topic string) (*Producer, error) {
+	prod, err := sharedproducer.New(broker)
 	if err != nil {
 		return nil, err
 	}
@@ -54,10 +54,10 @@ func New(ctx context.Context, broker, topic string) (*Producer, error) {
 	}, nil
 }
 
-func (p *Producer) ProduceSeedURLs() error {
+func (p *Producer) ProduceSeedURLs(ctx context.Context) error {
 	for _, url := range seedURLs {
 		msgID := uuid.New().String()
-		err := p.Produce([]byte(msgID), []byte(url), p.topic)
+		err := p.Produce(ctx, []byte(msgID), []byte(url), p.topic)
 
 		if err != nil {
 			return err

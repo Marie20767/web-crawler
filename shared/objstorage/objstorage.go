@@ -65,7 +65,7 @@ func (s *Store) FetchRawHTML(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch raw HTML from object store %v", err)
 	}
-	defer out.Body.Close()
+	defer out.Body.Close() //nolint:errcheck
 
 	raw, err := io.ReadAll(out.Body)
 	if err != nil {
@@ -78,10 +78,7 @@ func (s *Store) FetchRawHTML(ctx context.Context, url string) ([]byte, error) {
 
 func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
 	path := strings.TrimPrefix(objStoreURL, objStoreURLPrefix)
-	firstSlashI := strings.Index(path, "/")
-
-	bucket = path[:firstSlashI]
-	key = path[firstSlashI+1:]
+	bucket, key, _ = strings.Cut(path, "/")
 
 	return bucket, key
 }
