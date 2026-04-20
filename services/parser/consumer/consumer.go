@@ -35,7 +35,6 @@ const (
 
 type Consumer struct {
 	readers  []*kafka.Reader
-	ctx      context.Context
 	objStore *objstorage.Store
 	producer *producer.Producer
 }
@@ -61,7 +60,6 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 
 	return &Consumer{
 		readers:  readers,
-		ctx:      ctx,
 		objStore: objStore,
 		producer: prod,
 	}, nil
@@ -72,20 +70,20 @@ type job struct {
 	msg    kafka.Message
 }
 
-func (c *Consumer) Consume() error {
+func (c *Consumer) Consume(ctx context.Context) error {
 	jobs := make(chan job, workerCount)
 	var wg sync.WaitGroup
 
 	for range workerCount {
 		wg.Go(func() {
-			c.processMessages(jobs)
+			c.processMessages(ctx, jobs)
 		})
 	}
 
 	defer wg.Wait()
 	defer close(jobs)
 
-	errGrp, errGrpCtx := errgroup.WithContext(c.ctx)
+	errGrp, errGrpCtx := errgroup.WithContext(ctx)
 	for _, reader := range c.readers {
 		errGrp.Go(func() error {
 			return c.fetchMessages(errGrpCtx, reader, jobs)
@@ -134,10 +132,10 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 	}
 }
 
-func (c *Consumer) processMessages(jobs <-chan job) {
+func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
 	for job := range jobs {
 		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
-		if err := c.processMessage(&job.msg); err != nil {
+		if err := c.processMessage(ctx, &job.msg); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 			var hErr *httperr.Err
 			errStatusCode := 0
@@ -148,14 +146,14 @@ func (c *Consumer) processMessages(jobs <-chan job) {
 			c.producer.ProduceDLQ(&job.msg, errStatusCode)
 		}
 
-		if err := job.reader.CommitMessages(context.WithoutCancel(c.ctx), job.msg); err != nil {
+		if err := job.reader.CommitMessages(context.WithoutCancel(ctx), job.msg); err != nil {
 			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
 }
 
-func (c *Consumer) processMessage(msg *kafka.Message) error {
-	ctx := context.WithoutCancel(c.ctx)
+func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error {
+	ctxNoCancel := context.WithoutCancel(ctx)
 
 	var parserMsg message.ParserMessage
 	if err := json.Unmarshal(msg.Value, &parserMsg); err != nil {
@@ -167,7 +165,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return fmt.Errorf("parse page URL: %v", err)
 	}
 
-	rawHTML, err := c.objStore.FetchRawHTML(ctx, parserMsg.StorageURL)
+	rawHTML, err := c.objStore.FetchRawHTML(ctxNoCancel, parserMsg.StorageURL)
 	if err != nil {
 		return err
 	}
@@ -177,7 +175,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return err
 	}
 
-	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsedRes.text)
+	err = c.objStore.StoreParsedText(ctxNoCancel, string(msg.Key), parsedRes.text)
 	if err != nil {
 		return err
 	}

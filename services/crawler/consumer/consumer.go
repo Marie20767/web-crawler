@@ -41,7 +41,6 @@ const (
 type Consumer struct {
 	httpClient *http.Client
 	readers    []*kafka.Reader
-	ctx        context.Context
 	objStore   *objstorage.Store
 	producer   *producer.Producer
 }
@@ -75,7 +74,6 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 				IdleConnTimeout:     idleConnTimeout,
 			},
 		},
-		ctx:      ctx,
 		objStore: objStore,
 		producer: prod,
 	}, nil
@@ -86,20 +84,20 @@ type job struct {
 	reader *kafka.Reader
 }
 
-func (c *Consumer) Consume() error {
+func (c *Consumer) Consume(ctx context.Context) error {
 	jobs := make(chan job, workerCount)
 
 	var wg sync.WaitGroup
 	for range workerCount {
 		wg.Go(func() {
-			c.processMessages(jobs)
+			c.processMessages(ctx, jobs)
 		})
 	}
 
 	defer wg.Wait()
 	defer close(jobs)
 
-	errGrp, errGrpCtx := errgroup.WithContext(c.ctx)
+	errGrp, errGrpCtx := errgroup.WithContext(ctx)
 	for _, reader := range c.readers {
 		errGrp.Go(func() error {
 			return c.fetchMessages(errGrpCtx, reader, jobs)
@@ -148,10 +146,10 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 	}
 }
 
-func (c *Consumer) processMessages(jobs <-chan job) {
+func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
 	for job := range jobs {
 		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
-		if err := c.processMessage(&job.msg); err != nil {
+		if err := c.processMessage(ctx, &job.msg); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 			var hErr *httperr.Err
 			errStatusCode := 0
@@ -162,13 +160,13 @@ func (c *Consumer) processMessages(jobs <-chan job) {
 			c.producer.ProduceDLQ(&job.msg, errStatusCode)
 		}
 
-		if err := job.reader.CommitMessages(context.WithoutCancel(c.ctx), job.msg); err != nil {
+		if err := job.reader.CommitMessages(context.WithoutCancel(ctx), job.msg); err != nil {
 			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
 }
 
-func (c *Consumer) processMessage(msg *kafka.Message) error {
+func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error {
 	parsedURL, err := url.Parse(string(msg.Value))
 	if err != nil {
 		return err
@@ -177,16 +175,16 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return fmt.Errorf("invalid URL: %q", string(msg.Value))
 	}
 
-	ctx := context.WithoutCancel(c.ctx)
+	ctxNoCancel := context.WithoutCancel(ctx)
 
 	// prevent SSRF attacks (malicious page embeds links to internal network addresses)
-	if private, err := isPrivateHost(ctx, parsedURL.Hostname()); err != nil {
+	if private, err := isPrivateHost(ctxNoCancel, parsedURL.Hostname()); err != nil {
 		return fmt.Errorf("resolve host %q: %v", parsedURL.Hostname(), err)
 	} else if private {
 		return fmt.Errorf("blocked request to private host: %q", parsedURL.Hostname())
 	}
 
-	res, skipped, err := c.fetchWithLimit(ctx, parsedURL.String())
+	res, skipped, err := c.fetchWithLimit(ctxNoCancel, parsedURL.String())
 	if err != nil {
 		return err
 	}
@@ -194,7 +192,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 		return nil
 	}
 
-	storageLink, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
+	storageLink, err := c.objStore.StoreRawHTML(ctxNoCancel, string(msg.Key), res)
 	if err != nil {
 		return err
 	}

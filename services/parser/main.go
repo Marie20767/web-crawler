@@ -44,5 +44,5 @@ func run() error {
 	}
 	defer cons.Close()
 
-	return cons.Consume()
+	return cons.Consume(ctx)
 }
