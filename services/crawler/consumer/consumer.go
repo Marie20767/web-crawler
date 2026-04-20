@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
@@ -48,13 +47,8 @@ type Consumer struct {
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
-	partitions, err := strconv.Atoi(kafkaCfg.Partitions)
-	if err != nil {
-		return nil, err
-	}
-
-	readers := make([]*kafka.Reader, 0, partitions)
-	for range partitions {
+	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
+	for range kafkaCfg.Partitions {
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
 			Topic:    kafkaCfg.InitTopic,
@@ -146,7 +140,7 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 		}
 
 		select {
-		case jobs <- job{msg: msg, reader: reader}:
+		case jobs <- job{reader: reader, msg: msg}:
 		case <-ctx.Done():
 			slog.Warn("context cancelled, dropping unqueued message", slog.String("id", string(msg.Key)))
 			return nil
@@ -250,7 +244,6 @@ func (c *Consumer) Close() {
 			slog.Error("close consumer", slog.Any("error", err))
 		}
 	}
-
 }
 
 // privateIPRanges covers loopback, link-local (incl. AWS metadata at 169.254.169.254),

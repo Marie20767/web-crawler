@@ -7,6 +7,7 @@ require (
 	github.com/marie20767/web-crawler/shared v0.0.0-00010101000000-000000000000
 	github.com/segmentio/kafka-go v0.4.50
 	golang.org/x/net v0.53.0
+	golang.org/x/sync v0.20.0
 )
 
 replace github.com/marie20767/web-crawler/shared => ../../shared

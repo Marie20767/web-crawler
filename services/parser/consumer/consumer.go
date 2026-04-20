@@ -15,6 +15,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"golang.org/x/net/html"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
@@ -33,21 +34,25 @@ const (
 )
 
 type Consumer struct {
-	reader   *kafka.Reader
+	readers  []*kafka.Reader
 	ctx      context.Context
 	objStore *objstorage.Store
 	producer *producer.Producer
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{kafkaCfg.Broker},
-		Topic:   kafkaCfg.ParserTopic,
+	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
+	for range kafkaCfg.Partitions {
+		reader := kafka.NewReader(kafka.ReaderConfig{
+			Brokers:  []string{kafkaCfg.Broker},
+			Topic:    kafkaCfg.ParserTopic,
+			GroupID:  "parser",
+			MinBytes: kafkaMinBatchSize,
+			MaxBytes: kafkaMaxBatchSize,
+		})
 
-		GroupID:  "parser",
-		MinBytes: kafkaMinBatchSize,
-		MaxBytes: kafkaMaxBatchSize,
-	})
+		readers = append(readers, reader)
+	}
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.HTMLBucketPrefix, awsCfg.TextBucketPrefix)
 	if err != nil {
@@ -55,45 +60,45 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 	}
 
 	return &Consumer{
-		reader:   reader,
+		readers:  readers,
 		ctx:      ctx,
 		objStore: objStore,
 		producer: prod,
 	}, nil
 }
 
+type job struct {
+	reader *kafka.Reader
+	msg    kafka.Message
+}
+
 func (c *Consumer) Consume() error {
-	jobs := make(chan kafka.Message, workerCount)
+	jobs := make(chan job, workerCount)
 	var wg sync.WaitGroup
 
 	for range workerCount {
 		wg.Go(func() {
-			for job := range jobs {
-				slog.Info("processing message", slog.String("id", string(job.Key)))
-				if err := c.processMessage(&job); err != nil {
-					slog.Error("process message", slog.Any("error", err))
-					var hErr *httperr.Err
-					errStatusCode := 0
-					if errors.As(err, &hErr) {
-						errStatusCode = hErr.StatusCode
-					}
-
-					c.producer.ProduceDLQ(&job, errStatusCode)
-				}
-
-				if err := c.reader.CommitMessages(context.WithoutCancel(c.ctx), job); err != nil {
-					slog.Error("commit message offset", slog.Any("error", err))
-				}
-			}
+			c.processMessages(jobs)
 		})
 	}
 
 	defer wg.Wait()
 	defer close(jobs)
 
+	errGrp, errGrpCtx := errgroup.WithContext(c.ctx)
+	for _, reader := range c.readers {
+		errGrp.Go(func() error {
+			return c.fetchMessages(errGrpCtx, reader, jobs)
+		})
+	}
+
+	return errGrp.Wait()
+}
+
+func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs chan<- job) error {
 	for {
-		readCtx, cancel := context.WithTimeout(c.ctx, kafkaTimeout)
-		msg, err := c.reader.FetchMessage(readCtx)
+		readCtx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+		msg, err := reader.FetchMessage(readCtx)
 		cancel()
 
 		if err != nil {
@@ -102,7 +107,7 @@ func (c *Consumer) Consume() error {
 
 				slog.Info("no messages available, waiting to poll again", slog.Int64("interval_seconds", int64(kafkaPollInterval.Seconds())))
 				select {
-				case <-c.ctx.Done():
+				case <-ctx.Done():
 					timer.Stop()
 					slog.Info("context cancelled")
 					return nil
@@ -121,17 +126,32 @@ func (c *Consumer) Consume() error {
 		}
 
 		select {
-		case jobs <- msg:
-		case <-c.ctx.Done():
+		case jobs <- job{reader: reader, msg: msg}:
+		case <-ctx.Done():
 			slog.Warn("context cancelled, dropping unqueued message", slog.String("url", string(msg.Key)))
 			return nil
 		}
 	}
 }
 
-type Parsed struct {
-	text string
-	urls []string
+func (c *Consumer) processMessages(jobs <-chan job) {
+	for job := range jobs {
+		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
+		if err := c.processMessage(&job.msg); err != nil {
+			slog.Error("process message", slog.Any("error", err))
+			var hErr *httperr.Err
+			errStatusCode := 0
+			if errors.As(err, &hErr) {
+				errStatusCode = hErr.StatusCode
+			}
+
+			c.producer.ProduceDLQ(&job.msg, errStatusCode)
+		}
+
+		if err := job.reader.CommitMessages(context.WithoutCancel(c.ctx), job.msg); err != nil {
+			slog.Error("commit message offset", slog.Any("error", err))
+		}
+	}
 }
 
 func (c *Consumer) processMessage(msg *kafka.Message) error {
@@ -139,7 +159,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	var parserMsg message.ParserMessage
 	if err := json.Unmarshal(msg.Value, &parserMsg); err != nil {
-		return fmt.Errorf("unmarshal parser message: v", err)
+		return fmt.Errorf("unmarshal parser message: %v", err)
 	}
 
 	baseURL, err := url.Parse(parserMsg.PageURL)
@@ -165,7 +185,12 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	return c.producer.ProduceSeedURLs(parsedRes.urls)
 }
 
-func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, err error) {
+type parsed struct {
+	text string
+	urls []string
+}
+
+func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (*parsed, error) {
 	doc, err := html.Parse(bytes.NewReader(raw))
 	if err != nil {
 		return nil, fmt.Errorf("parse raw HTML %v", err)
@@ -224,20 +249,22 @@ func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (parsed *Parsed, e
 
 	walk(doc)
 
-	return &Parsed{
+	return &parsed{
 		text: sb.String(),
 		urls: urls,
 	}, nil
 }
 
 func (c *Consumer) Close() {
-	if err := c.reader.Close(); err != nil {
-		slog.Error("close consumer", slog.Any("error", err))
+	for _, reader := range c.readers {
+		if err := reader.Close(); err != nil {
+			slog.Error("close consumer", slog.Any("error", err))
+		}
 	}
 }
 
-func isResourceURL(url *url.URL) bool {
-	switch strings.ToLower(path.Ext(url.Path)) {
+func isResourceURL(u *url.URL) bool {
+	switch strings.ToLower(path.Ext(u.Path)) {
 	case ".css", ".woff", ".woff2", ".ttf", ".eot", ".otf",
 		".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp":
 		return true
