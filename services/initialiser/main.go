@@ -31,10 +31,10 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	prod, err := producer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.InitTopic)
+	prod, err := producer.New(cfg.Kafka.Broker, cfg.Kafka.InitTopic)
 	if err != nil {
 		return err
 	}
 	defer prod.Close()
-	return prod.ProduceSeedURLs()
+	return prod.ProduceSeedURLs(ctx)
 }

@@ -16,10 +16,9 @@ const (
 
 type Producer struct {
 	writer *kafka.Writer
-	ctx    context.Context
 }
 
-func New(ctx context.Context, broker string) (*Producer, error) {
+func New(broker string) (*Producer, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(broker),
 		RequiredAcks: kafka.RequireOne,
@@ -28,13 +27,12 @@ func New(ctx context.Context, broker string) (*Producer, error) {
 
 	return &Producer{
 		writer: writer,
-		ctx:    ctx,
 	}, nil
 }
 
-func (p *Producer) Produce(key, value []byte, topic string) error {
-	ctx := context.WithoutCancel(p.ctx)
-	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+func (p *Producer) Produce(ctx context.Context, key, value []byte, topic string) error {
+	ctxNoCancel := context.WithoutCancel(ctx)
+	writeCtx, cancelCtx := context.WithTimeout(ctxNoCancel, kafkaTimeout)
 	defer cancelCtx()
 
 	msg := kafka.Message{
@@ -52,9 +50,9 @@ func (p *Producer) Produce(key, value []byte, topic string) error {
 	return nil
 }
 
-func (p *Producer) ProduceBatch(msgs []kafka.Message, topic string) error {
-	ctx := context.WithoutCancel(p.ctx)
-	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+func (p *Producer) ProduceBatch(ctx context.Context, msgs []kafka.Message, topic string) error {
+	ctxNoCancel := context.WithoutCancel(ctx)
+	writeCtx, cancelCtx := context.WithTimeout(ctxNoCancel, kafkaTimeout)
 	defer cancelCtx()
 
 	if err := p.writer.WriteMessages(writeCtx, msgs...); err != nil {

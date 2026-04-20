@@ -157,7 +157,7 @@ func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
 				errStatusCode = hErr.StatusCode
 			}
 
-			c.producer.ProduceDLQ(&job.msg, errStatusCode)
+			c.producer.ProduceDLQ(ctx, &job.msg, errStatusCode)
 		}
 
 		if err := job.reader.CommitMessages(context.WithoutCancel(ctx), job.msg); err != nil {
@@ -197,7 +197,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return err
 	}
 
-	return c.producer.ProduceParser(string(msg.Key), parsedURL.String(), storageLink)
+	return c.producer.ProduceParser(ctxNoCancel, string(msg.Key), parsedURL.String(), storageLink)
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {

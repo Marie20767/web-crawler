@@ -32,7 +32,7 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	prod, err := producer.New(ctx, cfg.Kafka)
+	prod, err := producer.New(cfg.Kafka)
 	if err != nil {
 		return err
 	}
