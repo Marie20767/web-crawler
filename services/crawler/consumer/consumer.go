@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -69,7 +68,6 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 			Transport: &http.Transport{
-				DialContext:         newSSRFSafeDialContext(),
 				MaxIdleConns:        maxIdleConns,
 				MaxIdleConnsPerHost: maxIdleConnsPerHost,
 				IdleConnTimeout:     idleConnTimeout,
@@ -238,70 +236,3 @@ func (c *Consumer) Close() {
 	}
 }
 
-// privateIPRanges covers loopback, link-local (incl. AWS metadata at 169.254.169.254),
-// and RFC-1918 private ranges for both IPv4 and IPv6.
-var privateIPRanges = func() []*net.IPNet {
-	blocks := []string{
-		"127.0.0.0/8",    // IPv4 loopback
-		"169.254.0.0/16", // IPv4 link-local
-		"10.0.0.0/8",     // RFC-1918
-		"172.16.0.0/12",  // RFC-1918
-		"192.168.0.0/16", // RFC-1918
-		"::1/128",        // IPv6 loopback
-		"fc00::/7",       // IPv6 unique local
-		"fe80::/10",      // IPv6 link-local
-	}
-
-	ranges := make([]*net.IPNet, len(blocks))
-	for i, block := range blocks {
-		_, ipNet, _ := net.ParseCIDR(block)
-		ranges[i] = ipNet
-	}
-
-	return ranges
-}()
-
-func isPrivateIP(ip net.IP) bool {
-	for _, block := range privateIPRanges {
-		if block != nil && block.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// newSSRFSafeDialContext returns a DialContext that resolves DNS and validates all returned
-// IPs against privateIPRanges before dialing. Using the resolved IP directly prevents DNS
-// rebinding attacks, where a hostname resolves to a public IP at check time but a private
-// IP at dial time.
-func newSSRFSafeDialContext() func(context.Context, string, string) (net.Conn, error) {
-	dialer := &net.Dialer{}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, fmt.Errorf("parse dial address: %w", err)
-		}
-
-		ips, err := net.DefaultResolver.LookupHost(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, rawIP := range ips {
-			ip := net.ParseIP(rawIP)
-			if ip == nil {
-				slog.Warn("unparsable DNS address", slog.String("addr", rawIP))
-				continue
-			}
-			if isPrivateIP(ip) {
-				return nil, fmt.Errorf("blocked request to private host: %q", host)
-			}
-		}
-
-		if len(ips) == 0 {
-			return nil, fmt.Errorf("no addresses resolved for host: %q", host)
-		}
-
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
-	}
-}
