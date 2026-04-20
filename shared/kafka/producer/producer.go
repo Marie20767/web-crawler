@@ -31,8 +31,7 @@ func New(broker string) (*Producer, error) {
 }
 
 func (p *Producer) Produce(ctx context.Context, key, value []byte, topic string) error {
-	ctxNoCancel := context.WithoutCancel(ctx)
-	writeCtx, cancelCtx := context.WithTimeout(ctxNoCancel, kafkaTimeout)
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 
 	msg := kafka.Message{
@@ -51,8 +50,7 @@ func (p *Producer) Produce(ctx context.Context, key, value []byte, topic string)
 }
 
 func (p *Producer) ProduceBatch(ctx context.Context, msgs []kafka.Message, topic string) error {
-	ctxNoCancel := context.WithoutCancel(ctx)
-	writeCtx, cancelCtx := context.WithTimeout(ctxNoCancel, kafkaTimeout)
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
 
 	if err := p.writer.WriteMessages(writeCtx, msgs...); err != nil {

@@ -71,7 +71,7 @@ type job struct {
 }
 
 func (c *Consumer) Consume(ctx context.Context) error {
-	jobs := make(chan job, workerCount)
+	jobs := make(chan job, workerCount*2)
 	var wg sync.WaitGroup
 
 	for range workerCount {
@@ -133,9 +133,11 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 }
 
 func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
+	ctxNoCancel := context.WithoutCancel(ctx)
+
 	for job := range jobs {
 		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
-		if err := c.processMessage(ctx, &job.msg); err != nil {
+		if err := c.processMessage(ctxNoCancel, &job.msg); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 			var hErr *httperr.Err
 			errStatusCode := 0
@@ -143,18 +145,16 @@ func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
 				errStatusCode = hErr.StatusCode
 			}
 
-			c.producer.ProduceDLQ(ctx, &job.msg, errStatusCode)
+			c.producer.ProduceDLQ(ctxNoCancel, &job.msg, errStatusCode)
 		}
 
-		if err := job.reader.CommitMessages(context.WithoutCancel(ctx), job.msg); err != nil {
+		if err := job.reader.CommitMessages(ctxNoCancel, job.msg); err != nil {
 			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
 }
 
 func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error {
-	ctxNoCancel := context.WithoutCancel(ctx)
-
 	var parserMsg message.ParserMessage
 	if err := json.Unmarshal(msg.Value, &parserMsg); err != nil {
 		return fmt.Errorf("unmarshal parser message: %v", err)
@@ -165,7 +165,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return fmt.Errorf("parse page URL: %v", err)
 	}
 
-	rawHTML, err := c.objStore.FetchRawHTML(ctxNoCancel, parserMsg.StorageURL)
+	rawHTML, err := c.objStore.FetchRawHTML(ctx, parserMsg.StorageURL)
 	if err != nil {
 		return err
 	}
@@ -175,12 +175,12 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return err
 	}
 
-	err = c.objStore.StoreParsedText(ctxNoCancel, string(msg.Key), parsedRes.text)
+	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsedRes.text)
 	if err != nil {
 		return err
 	}
 
-	return c.producer.ProduceSeedURLs(ctxNoCancel, parsedRes.urls)
+	return c.producer.ProduceSeedURLs(ctx, parsedRes.urls)
 }
 
 type parsed struct {

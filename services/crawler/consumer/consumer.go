@@ -84,7 +84,7 @@ type job struct {
 }
 
 func (c *Consumer) Consume(ctx context.Context) error {
-	jobs := make(chan job, workerCount)
+	jobs := make(chan job, workerCount*2)
 
 	var wg sync.WaitGroup
 	for range workerCount {
@@ -146,9 +146,11 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 }
 
 func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
+	ctxNoCancel := context.WithoutCancel(ctx)
+
 	for job := range jobs {
 		slog.Info("processing message", slog.String("id", string(job.msg.Key)))
-		if err := c.processMessage(ctx, &job.msg); err != nil {
+		if err := c.processMessage(ctxNoCancel, &job.msg); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 			var hErr *httperr.Err
 			errStatusCode := 0
@@ -156,10 +158,10 @@ func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job) {
 				errStatusCode = hErr.StatusCode
 			}
 
-			c.producer.ProduceDLQ(ctx, &job.msg, errStatusCode)
+			c.producer.ProduceDLQ(ctxNoCancel, &job.msg, errStatusCode)
 		}
 
-		if err := job.reader.CommitMessages(context.WithoutCancel(ctx), job.msg); err != nil {
+		if err := job.reader.CommitMessages(ctxNoCancel, job.msg); err != nil {
 			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
@@ -174,9 +176,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return fmt.Errorf("unsupported scheme: %q", parsedURL.Scheme)
 	}
 
-	ctxNoCancel := context.WithoutCancel(ctx)
-
-	res, skipped, err := c.fetchWithLimit(ctxNoCancel, parsedURL.String())
+	res, skipped, err := c.fetchWithLimit(ctx, parsedURL.String())
 	if err != nil {
 		return err
 	}
@@ -184,12 +184,12 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return nil
 	}
 
-	storageLink, err := c.objStore.StoreRawHTML(ctxNoCancel, string(msg.Key), res)
+	storageLink, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
 	if err != nil {
 		return err
 	}
 
-	return c.producer.ProduceParser(ctxNoCancel, string(msg.Key), parsedURL.String(), storageLink)
+	return c.producer.ProduceParser(ctx, string(msg.Key), parsedURL.String(), storageLink)
 }
 
 func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
@@ -235,4 +235,3 @@ func (c *Consumer) Close() {
 		}
 	}
 }
-
