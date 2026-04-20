@@ -41,8 +41,20 @@ Crawler & parser services require AWS SSO authentication.
 Just follow the login steps on the browser window that automatically opens when running the app.
 
 #### Run full stack with Docker
+
+Start:
 ```bash
 make up
+```
+
+Stop: 
+```bash
+make down
+```
+
+Stop and delete all volumes:
+```bash
+make down/volumes
 ```
 
 #### Run services individually without Docker

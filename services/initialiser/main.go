@@ -4,45 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"time"
-
-	"github.com/google/uuid"
-	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/initialiser/config"
+	"github.com/marie20767/web-crawler/services/initialiser/producer"
 )
-
-const (
-	kafkaTimeout     = 30 * time.Second
-	kafkaMaxAttempts = 5
-)
-
-var seedURLs = []string{
-	"https://www.bookbrowse.com/read-alikes/",
-	"https://www.goodreads.com/list/tag/read-alikes",
-	"https://www.whatshouldireadnext.com/",
-	"https://www.libraryreads.org/",
-	"https://www.overbooked.org/",
-	"https://www.whichbook.net/",
-	"https://www.gnooks.com/",
-	"https://www.yalsa.ala.org/thehub/category/read-alikes/",
-	"https://bookriot.com/?s=read+alike",
-	"https://www.thereadinglist.co.uk/",
-	"https://www.goodreads.com/list/tag/similar-books",
-	"https://www.goodreads.com/list/tag/if-you-liked",
-	"https://www.panmacmillan.com/readers-resources/read-alikes",
-	"https://www.penguinrandomhouse.com/the-read-down/",
-	"https://www.reddit.com/r/suggestmeabook/",
-	"https://www.reddit.com/r/booksuggestions/",
-	"https://www.reddit.com/r/Fantasy/comments/readalikes",
-	"https://www.reddit.com/r/scifi/search/?q=if+you+like",
-	"https://www.mysterysequels.com/",
-	"https://www.fantasticfiction.com/similar/",
-	"https://crimereads.com/?s=if+you+like",
-	"https://www.thrillerwriters.org/resources/read-alikes/",
-	"https://www.nytimes.com/search?query=if+you+liked",
-	"https://www.theguardian.com/books/series/if-you-liked",
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -66,43 +31,10 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	writer := newWriter(cfg.Kafka.Broker, cfg.Kafka.InitTopic)
-	defer writer.Close() //nolint:errcheck
-	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
-	defer cancelCtx()
-
-	failedCount := 0
-	for _, url := range seedURLs {
-		msgID := uuid.New()
-		msg := kafka.Message{
-			Key:   []byte(msgID.String()),
-			Value: []byte(url),
-		}
-
-		err := writer.WriteMessages(writeCtx, msg)
-		if err != nil {
-			failedCount++
-			slog.Error("write message", slog.String("topic", cfg.Kafka.InitTopic), slog.Any("error", err))
-			continue
-		}
-
-		slog.Info("produced message", slog.String("id", msgID.String()), slog.String("url", url))
+	prod, err := producer.New(ctx, cfg.Kafka.Broker, cfg.Kafka.InitTopic)
+	if err != nil {
+		return err
 	}
-
-	slog.Info("producing to topic complete",
-		slog.String("topic", cfg.Kafka.InitTopic),
-		slog.Int("total", len(seedURLs)),
-		slog.Int("failed", failedCount),
-	)
-
-	return nil
-}
-
-func newWriter(broker, topic string) *kafka.Writer {
-	return &kafka.Writer{
-		Addr:         kafka.TCP(broker),
-		Topic:        topic,
-		RequiredAcks: kafka.RequireOne,
-		MaxAttempts:  kafkaMaxAttempts,
-	}
+	defer prod.Close()
+	return prod.ProduceSeedURLs()
 }

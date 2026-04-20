@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -21,11 +19,7 @@ type Producer struct {
 	ctx    context.Context
 }
 
-func New(ctx context.Context, broker string, topics ...string) (*Producer, error) {
-	if err := ensureTopics(broker, topics...); err != nil {
-		return nil, fmt.Errorf("ensure kafka topics: %v", err)
-	}
-
+func New(ctx context.Context, broker string) (*Producer, error) {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(broker),
 		RequiredAcks: kafka.RequireOne,
@@ -38,37 +32,7 @@ func New(ctx context.Context, broker string, topics ...string) (*Producer, error
 	}, nil
 }
 
-func ensureTopics(broker string, topics ...string) error {
-	conn, err := kafka.Dial("tcp", broker)
-	if err != nil {
-		return err
-	}
-	defer conn.Close() //nolint:errcheck
-
-	controller, err := conn.Controller()
-	if err != nil {
-		return err
-	}
-
-	controllerConn, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
-	if err != nil {
-		return err
-	}
-	defer controllerConn.Close() //nolint:errcheck
-
-	configs := make([]kafka.TopicConfig, len(topics))
-	for i, t := range topics {
-		configs[i] = kafka.TopicConfig{
-			Topic:             t,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-		}
-	}
-
-	return controllerConn.CreateTopics(configs...)
-}
-
-func (p *Producer) Publish(key, value []byte, topic string) {
+func (p *Producer) Produce(key, value []byte, topic string) error {
 	ctx := context.WithoutCancel(p.ctx)
 	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
 	defer cancelCtx()
@@ -80,10 +44,26 @@ func (p *Producer) Publish(key, value []byte, topic string) {
 	}
 
 	if err := p.writer.WriteMessages(writeCtx, msg); err != nil {
-		slog.Error("write message", slog.String("topic", topic), slog.Any("error", err))
-	} else {
-		slog.Info("producing to topic complete", slog.String("topic", topic))
+		slog.Error("produce message", slog.String("topic", topic), slog.Any("error", err))
+		return fmt.Errorf("produce message to topic %s %v", topic, err)
 	}
+
+	slog.Info("producing message complete", slog.String("topic", topic))
+	return nil
+}
+
+func (p *Producer) ProduceBatch(msgs []kafka.Message, topic string) error {
+	ctx := context.WithoutCancel(p.ctx)
+	writeCtx, cancelCtx := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancelCtx()
+
+	if err := p.writer.WriteMessages(writeCtx, msgs...); err != nil {
+		slog.Error("produce messages", slog.String("topic", topic), slog.Any("error", err))
+		return fmt.Errorf("produce messages to topic %s %v", topic, err)
+	}
+
+	slog.Info("producing messages complete", slog.String("topic", topic))
+	return nil
 }
 
 func (p *Producer) Close() {
