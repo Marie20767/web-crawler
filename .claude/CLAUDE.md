@@ -18,7 +18,7 @@ Initialiser → Kafka (init topic) → Crawler → AWS S3
 - **Kafka** (`infra/kafka/`): Apache Kafka 4.2.0. Topics (`init`, `crawler-dlq`, `parser`, `parser-dlq`) are created via a docker-init container on startup.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
-All services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` and/or `/producer` logic).
+All services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` and `/producer` logic).
 
 Go workspaces are set up with shared config and `go.mod` files under `/shared`.
 
