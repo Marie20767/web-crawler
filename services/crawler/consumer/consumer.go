@@ -84,7 +84,8 @@ type job struct {
 }
 
 func (c *Consumer) Consume(ctx context.Context) error {
-	jobs := make(chan job, workerCount*2)
+	bufferSize := workerCount * 2
+	jobs := make(chan job, bufferSize)
 
 	var wg sync.WaitGroup
 	for range workerCount {
