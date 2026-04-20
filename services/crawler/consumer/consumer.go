@@ -171,8 +171,8 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 	if err != nil {
 		return err
 	}
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("invalid URL: %q", string(msg.Value))
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme: %q", parsedURL.Scheme)
 	}
 
 	ctxNoCancel := context.WithoutCancel(ctx)
