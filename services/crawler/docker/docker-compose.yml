@@ -9,6 +9,7 @@ services:
         condition: service_completed_successfully
     env_file:
       .env.docker
+    restart: on-failure
     volumes:
       - ~/.aws:/home/crawler/.aws:ro
-    restart: on-failure
+
