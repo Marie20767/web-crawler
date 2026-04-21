@@ -8,6 +8,7 @@ A distributed web crawler built with 3 Go microservices communicating via Kafka,
 - Apache Kafka
 - AWS S3 (via Terraform)
 - Docker
+- MongoDB
 
 ### Architecture
 
