@@ -8,6 +8,13 @@ import (
 	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
 
+type App struct {
+	LogLevel slog.Level
+	Kafka    *Kafka
+	AWS      *AWS
+	Db       *Db
+}
+
 type Kafka struct {
 	Broker      string
 	ParserTopic string
@@ -23,10 +30,10 @@ type AWS struct {
 	BucketName       string
 }
 
-type App struct {
-	LogLevel slog.Level
-	Kafka    *Kafka
-	AWS      *AWS
+type Db struct {
+	Uri        string
+	Name       string
+	Collection string
 }
 
 func ParseEnv() (*App, error) {
@@ -41,6 +48,9 @@ func ParseEnv() (*App, error) {
 		"BUCKET_NAME",
 		"HTML_BUCKET_PREFIX",
 		"TEXT_BUCKET_PREFIX",
+		"DB_URI",
+		"DB_NAME",
+		"DB_COLLECTION",
 	})
 	if err != nil {
 		return nil, err
@@ -70,6 +80,11 @@ func ParseEnv() (*App, error) {
 			BucketName:       envVars["BUCKET_NAME"],
 			HTMLBucketPrefix: envVars["HTML_BUCKET_PREFIX"],
 			TextBucketPrefix: envVars["TEXT_BUCKET_PREFIX"],
+		},
+		Db: &Db{
+			Uri:        envVars["DB_URI"],
+			Name:       envVars["DB_NAME"],
+			Collection: envVars["DB_COLLECTION"],
 		},
 	}, nil
 }

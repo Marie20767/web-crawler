@@ -6,15 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
+	sharedDb "github.com/marie20767/web-crawler/shared/db"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/kafka/message"
@@ -24,15 +29,23 @@ import (
 const (
 	kafkaMinBatchSize = 10e3 // 10KB
 	kafkaMaxBatchSize = 10e6 // 10MB
+
+	dbTimeout = 5 * time.Second
 )
 
 type Consumer struct {
 	*sharedconsumer.Consumer
 	objStore *objstorage.Store
 	producer *producer.Producer
+	db       *db
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
+type db struct {
+	client     *sharedDb.Client
+	collection *mongo.Collection
+}
+
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg *config.Db, prod *producer.Producer) (*Consumer, error) {
 	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
 	for range kafkaCfg.Partitions {
 		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
@@ -49,10 +62,19 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		return nil, err
 	}
 
+	dbClient, err := sharedDb.New(ctx, dbCfg.Uri)
+	if err != nil {
+		return nil, fmt.Errorf("connect to db %v", err)
+	}
+
 	return &Consumer{
 		Consumer: sharedconsumer.New(readers),
 		objStore: objStore,
 		producer: prod,
+		db: &db{
+			client:     dbClient,
+			collection: dbClient.Collection(dbCfg.Name, dbCfg.Collection),
+		},
 	}, nil
 }
 
@@ -99,7 +121,12 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return err
 	}
 
-	return c.producer.ProduceSeedURLs(ctx, parsedRes.urls)
+	uniqueURLs, err := c.getUniqueURLs(ctx, parsedRes.urls)
+	if err != nil {
+		return err
+	}
+
+	return c.producer.ProduceSeedURLs(ctx, uniqueURLs)
 }
 
 type parsed struct {
@@ -179,4 +206,39 @@ func isResourceURL(u *url.URL) bool {
 	}
 
 	return false
+}
+
+func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) (unique []string, err error) {
+	duplicates := []string{}
+
+	filter := bson.M{
+		"_id": bson.M{"$in": parsedURLs},
+	}
+	cursor, err := c.db.collection.Find(ctx, filter)
+
+	for cursor.Next(ctx) {
+		var duplicate struct {
+			url string `bson:"_id"`
+		}
+		err := cursor.Decode(&duplicate)
+		if err != nil {
+			return nil, fmt.Errorf("fetch duplicate URLs from db %v", err)
+		}
+
+		duplicates = append(duplicates, duplicate.url)
+	}
+
+	return duplicates, nil
+}
+
+func (c *Consumer) Close() {
+	c.Consumer.Close()
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	err := c.db.client.Close(closeCtx)
+	if err != nil {
+		slog.Error("close db connection", slog.Any("error", err))
+	}
 }

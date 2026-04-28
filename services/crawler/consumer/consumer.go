@@ -79,9 +79,6 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
 	}
-	defer dbClient.Close(ctx) //nolint:errcheck
-	urlCollection := dbClient.Collection("", dbCfg.URLCollection)
-	domainCollection := dbClient.Collection("", dbCfg.DomainCollection)
 
 	return &Consumer{
 		Consumer: sharedconsumer.New(readers),
@@ -97,8 +94,8 @@ func New(
 		producer: prod,
 		db: &db{
 			client:           dbClient,
-			urlCollection:    urlCollection,
-			domainCollection: domainCollection,
+			urlCollection:    dbClient.Collection(dbCfg.Name, dbCfg.URLCollection),
+			domainCollection: dbClient.Collection(dbCfg.Name, dbCfg.DomainCollection),
 		},
 	}, nil
 }
@@ -155,7 +152,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return objStoreErr
 	}
 
-	filter := bson.M{"url": seedURL}
+	filter := bson.M{"_id": seedURL}
 	update := bson.M{
 		"$set": bson.M{
 			"lastCrawlTime": time.Now(),
@@ -176,7 +173,7 @@ func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, e
 	}
 
 	err := c.db.urlCollection.FindOne(ctx, bson.M{
-		"url": seedURL,
+		"_id": seedURL,
 	}).Decode(&doc)
 	if err != nil && err != mongo.ErrNoDocuments {
 		return false, fmt.Errorf("fetch url from db: %v", err)
@@ -231,4 +228,15 @@ func (c *Consumer) fetchHTMLWithLimit(ctx context.Context, seedURL string) (data
 	}
 
 	return data, false, nil
+}
+
+func (c *Consumer) Close() {
+	c.Consumer.Close()
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if err := c.db.client.Close(closeCtx); err != nil {
+		slog.Error("close db connection", slog.Any("error", err))
+	}
 }
