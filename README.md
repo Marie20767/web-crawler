@@ -41,6 +41,12 @@ See `/.claude/CLAUDE.md` for more details on the repo structure.
 Crawler & parser services require AWS SSO authentication. 
 Just follow the login steps on the browser window that automatically opens when running the app.
 
+#### Claude Code
+Run:
+```bash
+make claude
+```
+
 #### Run full stack with Docker
 
 Start:

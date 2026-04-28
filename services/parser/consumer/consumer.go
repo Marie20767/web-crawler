@@ -215,6 +215,9 @@ func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) (uniq
 		"_id": bson.M{"$in": parsedURLs},
 	}
 	cursor, err := c.db.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("fetch duplicate URLs from db %v", err)
+	}
 
 	for cursor.Next(ctx) {
 		var duplicate struct {
@@ -222,7 +225,7 @@ func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) (uniq
 		}
 		err := cursor.Decode(&duplicate)
 		if err != nil {
-			return nil, fmt.Errorf("fetch duplicate URLs from db %v", err)
+			return nil, fmt.Errorf("decode duplicate URL %v", err)
 		}
 
 		duplicates = append(duplicates, duplicate.url)
