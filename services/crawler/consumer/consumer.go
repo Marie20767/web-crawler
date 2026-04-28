@@ -128,10 +128,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 
 	seedURL := parsedURL.String()
 
-	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelDbCtx()
-
-	shouldFetch, shouldFetchErr := c.shouldFetchHTML(dbCtx, seedURL)
+	shouldFetch, shouldFetchErr := c.shouldFetchHTML(ctx, seedURL)
 	if shouldFetchErr != nil {
 		return shouldFetchErr
 	}
@@ -152,6 +149,8 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return objStoreErr
 	}
 
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
 	filter := bson.M{"_id": seedURL}
 	update := bson.M{
 		"$set": bson.M{
@@ -168,29 +167,29 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 }
 
 func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, error) {
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+
 	var doc struct {
 		LastCrawlTime time.Time `bson:"lastCrawlTime"`
 	}
 
-	err := c.db.urlCollection.FindOne(ctx, bson.M{
+	err := c.db.urlCollection.FindOne(dbCtx, bson.M{
 		"_id": seedURL,
 	}).Decode(&doc)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return false, fmt.Errorf("fetch url from db: %v", err)
 	}
 
 	cutoff := time.Now().AddDate(0, 0, -14)
-
-	if err == mongo.ErrNoDocuments {
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		return true, nil
 	}
-	if err != nil {
-		return false, fmt.Errorf("fetch url from db: %v", err)
-	} else if doc.LastCrawlTime.IsZero() || doc.LastCrawlTime.Before(cutoff) {
+	if doc.LastCrawlTime.IsZero() || doc.LastCrawlTime.Before(cutoff) {
 		return true, nil
 	}
 
-	slog.Info("skipped url: data not stale")
+	slog.Info("skipped url: data not stale", slog.String("url", seedURL))
 	return false, nil
 }
 

@@ -163,12 +163,13 @@ func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (*parsed, error) {
 			case html.ElementNode:
 				if n.Data == "a" {
 					for _, attr := range n.Attr {
-						parsedHref, hrefErr := url.Parse(attr.Val)
-						if hrefErr != nil {
+						if attr.Key != "href" {
 							continue
 						}
 
-						if attr.Key != "href" || isResourceURL(parsedHref) {
+						parsedHref, hrefErr := url.Parse(attr.Val)
+
+						if hrefErr != nil || isResourceURL(parsedHref) {
 							continue
 						}
 
@@ -209,29 +210,48 @@ func isResourceURL(u *url.URL) bool {
 }
 
 func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) (unique []string, err error) {
-	duplicates := []string{}
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+
+	duplicates := make([]string, 0, len(parsedURLs))
 
 	filter := bson.M{
 		"_id": bson.M{"$in": parsedURLs},
 	}
-	cursor, err := c.db.collection.Find(ctx, filter)
+	cursor, err := c.db.collection.Find(dbCtx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("fetch duplicate URLs from db %v", err)
 	}
+	defer cursor.Close(dbCtx) //nolint:errcheck
 
-	for cursor.Next(ctx) {
+	for cursor.Next(dbCtx) {
 		var duplicate struct {
-			url string `bson:"_id"`
+			URL string `bson:"_id"`
 		}
 		err := cursor.Decode(&duplicate)
 		if err != nil {
 			return nil, fmt.Errorf("decode duplicate URL %v", err)
 		}
 
-		duplicates = append(duplicates, duplicate.url)
+		duplicates = append(duplicates, duplicate.URL)
 	}
 
-	return duplicates, nil
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate duplicate URLs: %v", err)
+	}
+
+	seen := make(map[string]struct{}, len(duplicates))
+	for _, d := range duplicates {
+		seen[d] = struct{}{}
+	}
+	unique = make([]string, 0, len(parsedURLs))
+	for _, u := range parsedURLs {
+		if _, ok := seen[u]; !ok {
+			unique = append(unique, u)
+		}
+	}
+
+	return unique, nil
 }
 
 func (c *Consumer) Close() {
