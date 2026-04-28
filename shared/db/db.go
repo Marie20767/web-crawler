@@ -10,9 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	timeout = 10 * time.Second
-)
+const timeout = 5 * time.Second
 
 type Client struct {
 	client *mongo.Client
