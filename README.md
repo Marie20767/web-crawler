@@ -1,6 +1,6 @@
 ## Distributed Web Crawler
 
-A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3.
+A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3, and URL metadata in MongoDB.
 
 ### Stack
 
@@ -64,6 +64,12 @@ Kafka is always running via Docker and must be running first:
 ```bash
 cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
+```
+
+MongoDB is always running via Docker:
+
+```bash
+cd infra/db && make up
 ```
 
 Then from `services/initialiser` | `services/crawler` | `services/parser`:

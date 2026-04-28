@@ -79,7 +79,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
 	}
-	defer dbClient.Close(ctx)
+	defer dbClient.Close(ctx) //nolint:errcheck
 	urlCollection := dbClient.Collection("", dbCfg.URLCollection)
 	domainCollection := dbClient.Collection("", dbCfg.DomainCollection)
 
@@ -170,13 +170,13 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 	return c.producer.ProduceParser(ctx, string(msg.Key), seedURL, storageURL)
 }
 
-func (c *Consumer) shouldFetchHTML(ctx context.Context, url string) (bool, error) {
+func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, error) {
 	var doc struct {
 		LastCrawlTime time.Time `bson:"lastCrawlTime"`
 	}
 
 	err := c.db.urlCollection.FindOne(ctx, bson.M{
-		"url": url,
+		"url": seedURL,
 	}).Decode(&doc)
 	if err != nil && err != mongo.ErrNoDocuments {
 		return false, fmt.Errorf("fetch url from db: %v", err)
