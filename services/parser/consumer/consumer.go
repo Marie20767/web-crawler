@@ -35,7 +35,7 @@ const (
 
 	mongoDuplicateKeyErr = 11000
 
-	crawledExpiry = 14 * 24 * time.Hour
+	urlTTL = 14 * 24 * time.Hour
 )
 
 type Consumer struct {
@@ -72,7 +72,9 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 		return nil, fmt.Errorf("connect to db %v", err)
 	}
 
-	if err := dbClient.CreateTTLIndex(ctx, dbCfg.Name, dbCfg.Collection, "queuedAt", crawledExpiry); err != nil {
+	indexCtx, cancelIndexCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelIndexCtx()
+	if err := dbClient.CreateTTLIndex(indexCtx, dbCfg.Name, dbCfg.Collection, "queuedAt", urlTTL); err != nil {
 		return nil, fmt.Errorf("create TTL index: %v", err)
 	}
 
@@ -236,8 +238,9 @@ func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) ([]st
 	defer cancelDbCtx()
 
 	models := make([]mongo.WriteModel, len(deduped))
+	now := time.Now()
 	for i, u := range deduped {
-		models[i] = mongo.NewInsertOneModel().SetDocument(bson.M{"_id": u, "queuedAt": time.Now()})
+		models[i] = mongo.NewInsertOneModel().SetDocument(bson.M{"_id": u, "queuedAt": now})
 	}
 
 	_, err := c.db.collection.BulkWrite(dbCtx, models, options.BulkWrite().SetOrdered(false))
