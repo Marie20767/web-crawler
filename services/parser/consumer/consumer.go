@@ -19,7 +19,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
-	sharedDb "github.com/marie20767/web-crawler/shared/db"
+	shareddb "github.com/marie20767/web-crawler/shared/db"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/kafka/message"
@@ -41,7 +41,7 @@ type Consumer struct {
 }
 
 type db struct {
-	client     *sharedDb.Client
+	client     *shareddb.Client
 	collection *mongo.Collection
 }
 
@@ -62,7 +62,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 		return nil, err
 	}
 
-	dbClient, err := sharedDb.New(ctx, dbCfg.Uri)
+	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
 	}

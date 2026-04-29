@@ -17,7 +17,7 @@ import (
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
-	sharedDb "github.com/marie20767/web-crawler/shared/db"
+	shareddb "github.com/marie20767/web-crawler/shared/db"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/objstorage"
@@ -47,7 +47,7 @@ type Consumer struct {
 }
 
 type db struct {
-	client           *sharedDb.Client
+	client           *shareddb.Client
 	urlCollection    *mongo.Collection
 	domainCollection *mongo.Collection
 }
@@ -75,7 +75,7 @@ func New(
 		return nil, fmt.Errorf("create object storage %v", err)
 	}
 
-	dbClient, err := sharedDb.New(ctx, dbCfg.Uri)
+	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
 	}
