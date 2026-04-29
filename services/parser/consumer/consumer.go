@@ -15,6 +15,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
@@ -31,6 +32,10 @@ const (
 	kafkaMaxBatchSize = 10e6 // 10MB
 
 	dbTimeout = 5 * time.Second
+
+	mongoDuplicateKeyErr = 11000
+
+	crawledExpiry = 14 * 24 * time.Hour
 )
 
 type Consumer struct {
@@ -65,6 +70,10 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
+	}
+
+	if err := dbClient.CreateTTLIndex(ctx, dbCfg.Name, dbCfg.Collection, "queuedAt", crawledExpiry); err != nil {
+		return nil, fmt.Errorf("create TTL index: %v", err)
 	}
 
 	return &Consumer{
@@ -209,44 +218,49 @@ func isResourceURL(u *url.URL) bool {
 	return false
 }
 
-func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) (unique []string, err error) {
+func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) ([]string, error) {
+	if len(parsedURLs) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(parsedURLs))
+	deduped := make([]string, 0, len(parsedURLs))
+	for _, u := range parsedURLs {
+		if _, ok := seen[u]; !ok {
+			seen[u] = struct{}{}
+			deduped = append(deduped, u)
+		}
+	}
+
 	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelDbCtx()
 
-	duplicates := make([]string, 0, len(parsedURLs))
-
-	filter := bson.M{
-		"_id": bson.M{"$in": parsedURLs},
+	models := make([]mongo.WriteModel, len(deduped))
+	for i, u := range deduped {
+		models[i] = mongo.NewInsertOneModel().SetDocument(bson.M{"_id": u, "queuedAt": time.Now()})
 	}
-	cursor, err := c.db.collection.Find(dbCtx, filter)
-	if err != nil {
-		return nil, fmt.Errorf("fetch duplicate URLs from db %v", err)
-	}
-	defer cursor.Close(dbCtx) //nolint:errcheck
 
-	for cursor.Next(dbCtx) {
-		var duplicate struct {
-			URL string `bson:"_id"`
+	_, err := c.db.collection.BulkWrite(dbCtx, models, options.BulkWrite().SetOrdered(false))
+	if err == nil {
+		return deduped, nil
+	}
+
+	var bulkErr mongo.BulkWriteException
+	if !errors.As(err, &bulkErr) {
+		return nil, fmt.Errorf("bulk insert URLs: %v", err)
+	}
+
+	alreadySeen := make(map[string]struct{}, len(bulkErr.WriteErrors))
+	for _, we := range bulkErr.WriteErrors {
+		if we.Code != mongoDuplicateKeyErr {
+			return nil, fmt.Errorf("insert URL into db: %v", we.Message)
 		}
-		err := cursor.Decode(&duplicate)
-		if err != nil {
-			return nil, fmt.Errorf("decode duplicate URL %v", err)
-		}
-
-		duplicates = append(duplicates, duplicate.URL)
+		alreadySeen[deduped[we.Index]] = struct{}{}
 	}
 
-	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("iterate duplicate URLs: %v", err)
-	}
-
-	seen := make(map[string]struct{}, len(duplicates))
-	for _, d := range duplicates {
-		seen[d] = struct{}{}
-	}
-	unique = make([]string, 0, len(parsedURLs))
-	for _, u := range parsedURLs {
-		if _, ok := seen[u]; !ok {
+	unique := make([]string, 0, len(deduped)-len(alreadySeen))
+	for _, u := range deduped {
+		if _, isDuplicate := alreadySeen[u]; !isDuplicate {
 			unique = append(unique, u)
 		}
 	}

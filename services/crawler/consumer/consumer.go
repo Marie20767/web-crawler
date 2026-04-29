@@ -153,10 +153,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 	defer cancelDbCtx()
 	filter := bson.M{"_id": seedURL}
 	update := bson.M{
-		"$set": bson.M{
-			"lastCrawlTime": time.Now(),
-			"storageUrl":    storageURL,
-		},
+		"$set": bson.M{"storageUrl": storageURL},
 	}
 	_, dbErr := c.db.urlCollection.UpdateOne(dbCtx, filter, update, options.Update().SetUpsert(true))
 	if dbErr != nil {
@@ -171,7 +168,7 @@ func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, e
 	defer cancelDbCtx()
 
 	var doc struct {
-		LastCrawlTime time.Time `bson:"lastCrawlTime"`
+		StorageURL string `bson:"storageUrl"`
 	}
 
 	err := c.db.urlCollection.FindOne(dbCtx, bson.M{
@@ -181,15 +178,11 @@ func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, e
 		return false, fmt.Errorf("fetch url from db: %v", err)
 	}
 
-	cutoff := time.Now().AddDate(0, 0, -14)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return true, nil
-	}
-	if doc.LastCrawlTime.IsZero() || doc.LastCrawlTime.Before(cutoff) {
+	if errors.Is(err, mongo.ErrNoDocuments) || doc.StorageURL == "" {
 		return true, nil
 	}
 
-	slog.Info("skipped url: data not stale", slog.String("url", seedURL))
+	slog.Info("skipped url: already crawled", slog.String("url", seedURL))
 	return false, nil
 }
 

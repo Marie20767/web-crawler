@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -40,4 +41,15 @@ func (c *Client) Close(ctx context.Context) error {
 
 func (c *Client) Collection(db, collection string) *mongo.Collection {
 	return c.client.Database(db).Collection(collection)
+}
+
+func (c *Client) CreateTTLIndex(ctx context.Context, db, collection, field string, expiry time.Duration) error {
+	index := mongo.IndexModel{
+		Keys: bson.D{{Key: field, Value: 1}},
+		Options: options.Index().
+			SetExpireAfterSeconds(int32(expiry.Seconds())).
+			SetName(field + "_ttl"),
+	}
+	_, err := c.client.Database(db).Collection(collection).Indexes().CreateOne(ctx, index)
+	return err
 }
