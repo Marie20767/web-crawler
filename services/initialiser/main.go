@@ -31,7 +31,7 @@ func run() error {
 	}))
 	slog.SetDefault(logger)
 
-	prod, err := producer.New(cfg.Kafka.Broker, cfg.Kafka.InitTopic)
+	prod, err := producer.New(cfg.Kafka.Broker, cfg.Kafka.UrlTopic)
 	if err != nil {
 		return err
 	}

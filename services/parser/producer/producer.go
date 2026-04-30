@@ -3,9 +3,9 @@ package producer
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"slices"
 
-	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
@@ -44,15 +44,21 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context, urls []string) error {
 		chunk := urls[i:min(i+seedURLsBatchSize, len(urls))]
 
 		msgs := make([]kafka.Message, 0, len(chunk))
-		for _, url := range chunk {
+		for _, u := range chunk {
+			parsed, err := url.Parse(u)
+			if err != nil {
+				slog.Error("parse URL", slog.String("URL", u), slog.Any("error", err))
+				continue
+			}
+
 			msgs = append(msgs, kafka.Message{
-				Topic: p.cfg.InitTopic,
-				Key:   []byte(uuid.New().String()),
-				Value: []byte(url),
+				Topic: p.cfg.UrlTopic,
+				Key:   []byte(parsed.Hostname()),
+				Value: []byte(u),
 			})
 		}
 
-		err := p.ProduceBatch(ctx, msgs, p.cfg.InitTopic)
+		err := p.ProduceBatch(ctx, msgs, p.cfg.UrlTopic)
 		if err != nil {
 			return err
 		}

@@ -39,6 +39,7 @@ func (p *Producer) ProduceDLQ(ctx context.Context, msg *kafka.Message, errCode i
 	_ = p.Produce(ctx, msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
+// TODO: hash url instead of using messageID, can we reuse some logic?
 func (p *Producer) ProduceParser(ctx context.Context, messageID, pageURL, storageURL string) error {
 	payload, err := json.Marshal(message.ParserMessage{
 		PageURL:    pageURL,

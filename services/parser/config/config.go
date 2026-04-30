@@ -19,7 +19,7 @@ type Kafka struct {
 	Broker      string
 	ParserTopic string
 	DLQTopic    string
-	InitTopic   string
+	UrlTopic    string
 	Partitions  int
 	GroupID     string
 }
@@ -72,7 +72,7 @@ func ParseEnv() (*App, error) {
 			Broker:      envVars["KAFKA_BROKER"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
-			InitTopic:   envVars["KAFKA_URL_TOPIC"],
+			UrlTopic:    envVars["KAFKA_URL_TOPIC"],
 			Partitions:  partitions,
 			GroupID:     envVars["KAFKA_GROUP_ID"],
 		},
