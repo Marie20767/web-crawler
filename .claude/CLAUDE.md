@@ -20,7 +20,7 @@ Initialiser → Kafka (url topic) → Crawler → AWS S3 (raw HTML)
 - **Crawler** (`services/crawler/`): Consumes URLs, fetches HTML, stores raw HTML in S3 and URL metadata in MongoDB, and produces to parser topic.
 - **Parser** (`services/parser/`): Fetches raw HTML from S3, extracts text and URLs, stores parsed text in S3 and produces new URLs to url topic.
 - **Kafka** (`infra/kafka/`): Runs only via Docker. Apache Kafka 4.2.0. Topics (`url`, `crawler-dlq`, `parser`, `parser-dlq`) are created via a kafka-init container on startup.
-- **MongoDB** (`infra/mongodb/`): Runs only via Docker. The `url` collection is used for deduplication — checked before fetching HTML (crawler) and before producing to the url topic (parser).
+- **MongoDB** (`infra/mongodb/`): Runs only via Docker. The `url` collection is used for deduplication — checked before fetching HTML (crawler) and before producing to the url topic (parser). The `domain` collection checks crawling rules to ensure polite crawling.
 - **Infra** (`infra/terraform/`): Terraform for AWS S3 buckets. Requires `aws sso login --profile terraform`.
 
 All services share the same package layout: `main.go`, `config/config.go`, and a domain package (`consumer/` and `/producer` logic).

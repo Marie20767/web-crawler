@@ -2,8 +2,8 @@ package producer
 
 import (
 	"context"
-
-	"github.com/google/uuid"
+	"log/slog"
+	"net/url"
 
 	sharedproducer "github.com/marie20767/web-crawler/shared/kafka/producer"
 )
@@ -55,9 +55,15 @@ func New(broker, topic string) (*Producer, error) {
 }
 
 func (p *Producer) ProduceSeedURLs(ctx context.Context) error {
-	for _, url := range seedURLs {
-		msgID := uuid.New().String()
-		err := p.Produce(ctx, []byte(msgID), []byte(url), p.topic)
+	for _, seed := range seedURLs {
+		parsed, err := url.Parse(seed)
+		if err != nil {
+			slog.Error("parse URL", slog.String("URL", seed))
+			continue
+		}
+
+		host := parsed.Hostname()
+		err = p.Produce(ctx, []byte(host), []byte(seed), p.topic)
 
 		if err != nil {
 			return err

@@ -7,8 +7,8 @@ import (
 )
 
 type Kafka struct {
-	Broker    string
-	InitTopic string
+	Broker   string
+	UrlTopic string
 }
 
 type App struct {
@@ -34,8 +34,8 @@ func ParseEnv() (*App, error) {
 	return &App{
 		LogLevel: logLevel,
 		Kafka: &Kafka{
-			Broker:    envVars["KAFKA_BROKER"],
-			InitTopic: envVars["KAFKA_URL_TOPIC"],
+			Broker:   envVars["KAFKA_BROKER"],
+			UrlTopic: envVars["KAFKA_URL_TOPIC"],
 		},
 	}, nil
 }

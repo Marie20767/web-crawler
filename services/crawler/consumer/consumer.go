@@ -36,6 +36,10 @@ const (
 	idleConnTimeout     = 90 * time.Second
 
 	dbTimeout = 5 * time.Second
+
+	domainTTL = 24 * time.Hour
+
+	maxCrawlDelay = 30 // in seconds
 )
 
 type Consumer struct {
@@ -63,7 +67,7 @@ func New(
 	for range kafkaCfg.Partitions {
 		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
-			Topic:    kafkaCfg.InitTopic,
+			Topic:    kafkaCfg.UrlTopic,
 			GroupID:  kafkaCfg.GroupID,
 			MinBytes: kafkaMinBatchSize,
 			MaxBytes: kafkaMaxBatchSize,
@@ -78,6 +82,12 @@ func New(
 	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
 	if err != nil {
 		return nil, fmt.Errorf("connect to db %v", err)
+	}
+
+	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelIdxCtx()
+	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.DomainCollection, "expireAt", domainTTL); err != nil {
+		return nil, fmt.Errorf("create domain TTL index: %v", err)
 	}
 
 	return &Consumer{
@@ -128,11 +138,19 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 
 	seedURL := parsedURL.String()
 
-	shouldFetch, shouldFetchErr := c.shouldFetchHTML(ctx, seedURL)
-	if shouldFetchErr != nil {
-		return shouldFetchErr
+	crawled, crawlCheckErr := c.alreadyCrawled(ctx, seedURL)
+	if crawlCheckErr != nil {
+		return crawlCheckErr
 	}
-	if !shouldFetch {
+	if crawled {
+		return nil
+	}
+
+	isAllowed, rateLimitErr := c.handleRateLimit(ctx, seedURL, string(msg.Key))
+	if rateLimitErr != nil {
+		return rateLimitErr
+	}
+	if !isAllowed {
 		return nil
 	}
 
@@ -160,10 +178,12 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return fmt.Errorf("update URL %v", dbErr)
 	}
 
+	// TODO: update lastCrawlTime in domain collection
+
 	return c.producer.ProduceParser(ctx, string(msg.Key), seedURL, storageURL)
 }
 
-func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, error) {
+func (c *Consumer) alreadyCrawled(ctx context.Context, seedURL string) (bool, error) {
 	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelDbCtx()
 
@@ -184,6 +204,30 @@ func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, e
 
 	slog.Info("skipped url: already crawled", slog.String("url", seedURL))
 	return false, nil
+}
+
+func (c *Consumer) handleRateLimit(ctx context.Context, seedURL, domain string) (isAllowed bool, err error) {
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+	// TODO:
+	// 1. get path
+	// 2. query domain collection with domain filter (need crawlDelay, allowedPaths, disallowedPaths, lastCrawlTime)
+	//     - if no documents:
+	              // 1. fetch robots.txt
+	             // 2. update DB
+	             // 3. check path is allowed
+	             // 4. if path is !allowed return false, nil else return true, nil
+	//    - if domain result:
+	//           // 1. check path is allowed, if not return false, nil
+	             // 2. check lastCrawlTime > now (unix timestamp) + crawlDelay:
+							 //   - if yes: return true, nil
+							 //   - if no:
+							 //       1. sleep min(crawlDelay, maxCrawlDelay)
+							 //       2. check lastCrawlTime > now (unix timestamp) + crawlDelay
+							 //          - if yes: return true, nil
+							 //          - if no: reproduce to url topic return false, nil
+
+	return true, nil
 }
 
 func (c *Consumer) fetchHTMLWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
