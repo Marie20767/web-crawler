@@ -1,6 +1,6 @@
 ## Distributed Web Crawler
 
-A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3.
+A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3, and URL metadata in MongoDB.
 
 ### Stack
 
@@ -8,6 +8,7 @@ A distributed web crawler built with 3 Go microservices communicating via Kafka,
 - Apache Kafka
 - AWS S3 (via Terraform)
 - Docker
+- MongoDB
 
 ### Architecture
 
@@ -40,6 +41,12 @@ See `/.claude/CLAUDE.md` for more details on the repo structure.
 Crawler & parser services require AWS SSO authentication. 
 Just follow the login steps on the browser window that automatically opens when running the app.
 
+#### Claude Code
+Run:
+```bash
+make claude
+```
+
 #### Run full stack with Docker
 
 Start:
@@ -63,6 +70,12 @@ Kafka is always running via Docker and must be running first:
 ```bash
 cd infra/kafka && make up
 # Kafka UI: http://localhost:8080
+```
+
+MongoDB is always running via Docker:
+
+```bash
+cd infra/db && make up
 ```
 
 Then from `services/initialiser` | `services/crawler` | `services/parser`:

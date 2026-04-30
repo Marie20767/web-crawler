@@ -11,9 +11,13 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
+	shareddb "github.com/marie20767/web-crawler/shared/db"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/objstorage"
@@ -30,6 +34,8 @@ const (
 	maxIdleConns        = 200
 	maxIdleConnsPerHost = 20
 	idleConnTimeout     = 90 * time.Second
+
+	dbTimeout = 5 * time.Second
 )
 
 type Consumer struct {
@@ -37,9 +43,22 @@ type Consumer struct {
 	httpClient *http.Client
 	objStore   *objstorage.Store
 	producer   *producer.Producer
+	db         *db
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
+type db struct {
+	client           *shareddb.Client
+	urlCollection    *mongo.Collection
+	domainCollection *mongo.Collection
+}
+
+func New(
+	ctx context.Context,
+	kafkaCfg *config.Kafka,
+	awsCfg *config.AWS,
+	dbCfg *config.Db,
+	prod *producer.Producer,
+) (*Consumer, error) {
 	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
 	for range kafkaCfg.Partitions {
 		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
@@ -53,7 +72,12 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix, "")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create object storage %v", err)
+	}
+
+	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
+	if err != nil {
+		return nil, fmt.Errorf("connect to db %v", err)
 	}
 
 	return &Consumer{
@@ -68,6 +92,11 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		},
 		objStore: objStore,
 		producer: prod,
+		db: &db{
+			client:           dbClient,
+			urlCollection:    dbClient.Collection(dbCfg.Name, dbCfg.URLCollection),
+			domainCollection: dbClient.Collection(dbCfg.Name, dbCfg.DomainCollection),
+		},
 	}, nil
 }
 
@@ -89,31 +118,75 @@ func (c *Consumer) handle(ctx context.Context, msg *kafka.Message) error {
 }
 
 func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error {
-	parsedURL, err := url.Parse(string(msg.Value))
-	if err != nil {
-		return err
+	parsedURL, parseErr := url.Parse(string(msg.Value))
+	if parseErr != nil {
+		return parseErr
 	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return fmt.Errorf("unsupported scheme: %q", parsedURL.Scheme)
 	}
 
-	res, skipped, err := c.fetchWithLimit(ctx, parsedURL.String())
-	if err != nil {
-		return err
+	seedURL := parsedURL.String()
+
+	shouldFetch, shouldFetchErr := c.shouldFetchHTML(ctx, seedURL)
+	if shouldFetchErr != nil {
+		return shouldFetchErr
+	}
+	if !shouldFetch {
+		return nil
+	}
+
+	res, skipped, fetchErr := c.fetchHTMLWithLimit(ctx, seedURL)
+	if fetchErr != nil {
+		return fetchErr
 	}
 	if skipped {
 		return nil
 	}
 
-	storageLink, err := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
-	if err != nil {
-		return err
+	storageURL, objStoreErr := c.objStore.StoreRawHTML(ctx, string(msg.Key), res)
+	if objStoreErr != nil {
+		return objStoreErr
 	}
 
-	return c.producer.ProduceParser(ctx, string(msg.Key), parsedURL.String(), storageLink)
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+	filter := bson.M{"_id": seedURL}
+	update := bson.M{
+		"$set": bson.M{"storageUrl": storageURL},
+	}
+	_, dbErr := c.db.urlCollection.UpdateOne(dbCtx, filter, update, options.Update().SetUpsert(true))
+	if dbErr != nil {
+		return fmt.Errorf("update URL %v", dbErr)
+	}
+
+	return c.producer.ProduceParser(ctx, string(msg.Key), seedURL, storageURL)
 }
 
-func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
+func (c *Consumer) shouldFetchHTML(ctx context.Context, seedURL string) (bool, error) {
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+
+	var doc struct {
+		StorageURL string `bson:"storageUrl"`
+	}
+
+	err := c.db.urlCollection.FindOne(dbCtx, bson.M{
+		"_id": seedURL,
+	}).Decode(&doc)
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return false, fmt.Errorf("fetch url from db: %v", err)
+	}
+
+	if errors.Is(err, mongo.ErrNoDocuments) || doc.StorageURL == "" {
+		return true, nil
+	}
+
+	slog.Info("skipped url: already crawled", slog.String("url", seedURL))
+	return false, nil
+}
+
+func (c *Consumer) fetchHTMLWithLimit(ctx context.Context, seedURL string) (data []byte, skipped bool, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seedURL, http.NoBody)
 	if err != nil {
 		return nil, false, fmt.Errorf("create web page request %v", err)
@@ -147,4 +220,15 @@ func (c *Consumer) fetchWithLimit(ctx context.Context, seedURL string) (data []b
 	}
 
 	return data, false, nil
+}
+
+func (c *Consumer) Close() {
+	c.Consumer.Close()
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if err := c.db.client.Close(closeCtx); err != nil {
+		slog.Error("close db connection", slog.Any("error", err))
+	}
 }

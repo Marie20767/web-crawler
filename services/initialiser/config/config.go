@@ -20,7 +20,7 @@ func ParseEnv() (*App, error) {
 	envVars, err := sharedconfig.LoadEnvVars([]string{
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
-		"KAFKA_INIT_TOPIC",
+		"KAFKA_URL_TOPIC",
 	})
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func ParseEnv() (*App, error) {
 		LogLevel: logLevel,
 		Kafka: &Kafka{
 			Broker:    envVars["KAFKA_BROKER"],
-			InitTopic: envVars["KAFKA_INIT_TOPIC"],
+			InitTopic: envVars["KAFKA_URL_TOPIC"],
 		},
 	}, nil
 }

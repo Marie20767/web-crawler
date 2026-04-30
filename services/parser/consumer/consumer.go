@@ -6,15 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
+	shareddb "github.com/marie20767/web-crawler/shared/db"
 	"github.com/marie20767/web-crawler/shared/httperr"
 	sharedconsumer "github.com/marie20767/web-crawler/shared/kafka/consumer"
 	"github.com/marie20767/web-crawler/shared/kafka/message"
@@ -24,15 +30,27 @@ import (
 const (
 	kafkaMinBatchSize = 10e3 // 10KB
 	kafkaMaxBatchSize = 10e6 // 10MB
+
+	dbTimeout = 5 * time.Second
+
+	mongoDuplicateKeyErr = 11000
+
+	urlTTL = 14 * 24 * time.Hour
 )
 
 type Consumer struct {
 	*sharedconsumer.Consumer
 	objStore *objstorage.Store
 	producer *producer.Producer
+	db       *db
 }
 
-func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *producer.Producer) (*Consumer, error) {
+type db struct {
+	client     *shareddb.Client
+	collection *mongo.Collection
+}
+
+func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg *config.Db, prod *producer.Producer) (*Consumer, error) {
 	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
 	for range kafkaCfg.Partitions {
 		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
@@ -49,10 +67,25 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, prod *
 		return nil, err
 	}
 
+	dbClient, err := shareddb.New(ctx, dbCfg.Uri)
+	if err != nil {
+		return nil, fmt.Errorf("connect to db %v", err)
+	}
+
+	indexCtx, cancelIndexCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelIndexCtx()
+	if err := dbClient.CreateTTLIndex(indexCtx, dbCfg.Name, dbCfg.Collection, "queuedAt", urlTTL); err != nil {
+		return nil, fmt.Errorf("create TTL index: %v", err)
+	}
+
 	return &Consumer{
 		Consumer: sharedconsumer.New(readers),
 		objStore: objStore,
 		producer: prod,
+		db: &db{
+			client:     dbClient,
+			collection: dbClient.Collection(dbCfg.Name, dbCfg.Collection),
+		},
 	}, nil
 }
 
@@ -99,7 +132,12 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return err
 	}
 
-	return c.producer.ProduceSeedURLs(ctx, parsedRes.urls)
+	uniqueURLs, err := c.getUniqueURLs(ctx, parsedRes.urls)
+	if err != nil {
+		return err
+	}
+
+	return c.producer.ProduceSeedURLs(ctx, uniqueURLs)
 }
 
 type parsed struct {
@@ -136,12 +174,13 @@ func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (*parsed, error) {
 			case html.ElementNode:
 				if n.Data == "a" {
 					for _, attr := range n.Attr {
-						parsedHref, hrefErr := url.Parse(attr.Val)
-						if hrefErr != nil {
+						if attr.Key != "href" {
 							continue
 						}
 
-						if attr.Key != "href" || isResourceURL(parsedHref) {
+						parsedHref, hrefErr := url.Parse(attr.Val)
+
+						if hrefErr != nil || isResourceURL(parsedHref) {
 							continue
 						}
 
@@ -179,4 +218,67 @@ func isResourceURL(u *url.URL) bool {
 	}
 
 	return false
+}
+
+func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) ([]string, error) {
+	if len(parsedURLs) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(parsedURLs))
+	deduped := make([]string, 0, len(parsedURLs))
+	for _, u := range parsedURLs {
+		if _, ok := seen[u]; !ok {
+			seen[u] = struct{}{}
+			deduped = append(deduped, u)
+		}
+	}
+
+	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelDbCtx()
+
+	models := make([]mongo.WriteModel, len(deduped))
+	now := time.Now()
+	for i, u := range deduped {
+		models[i] = mongo.NewInsertOneModel().SetDocument(bson.M{"_id": u, "queuedAt": now})
+	}
+
+	_, err := c.db.collection.BulkWrite(dbCtx, models, options.BulkWrite().SetOrdered(false))
+	if err == nil {
+		return deduped, nil
+	}
+
+	var bulkErr mongo.BulkWriteException
+	if !errors.As(err, &bulkErr) {
+		return nil, fmt.Errorf("bulk insert URLs: %v", err)
+	}
+
+	alreadySeen := make(map[string]struct{}, len(bulkErr.WriteErrors))
+	for _, we := range bulkErr.WriteErrors {
+		if we.Code != mongoDuplicateKeyErr {
+			return nil, fmt.Errorf("insert URL into db: %v", we.Message)
+		}
+		alreadySeen[deduped[we.Index]] = struct{}{}
+	}
+
+	unique := make([]string, 0, len(deduped)-len(alreadySeen))
+	for _, u := range deduped {
+		if _, isDuplicate := alreadySeen[u]; !isDuplicate {
+			unique = append(unique, u)
+		}
+	}
+
+	return unique, nil
+}
+
+func (c *Consumer) Close() {
+	c.Consumer.Close()
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	err := c.db.client.Close(closeCtx)
+	if err != nil {
+		slog.Error("close db connection", slog.Any("error", err))
+	}
 }

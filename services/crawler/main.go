@@ -41,7 +41,7 @@ func run() error {
 	}
 	defer prod.Close()
 
-	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS, prod)
+	cons, err := consumer.New(ctx, cfg.Kafka, cfg.AWS, cfg.Db, prod)
 	if err != nil {
 		return err
 	}

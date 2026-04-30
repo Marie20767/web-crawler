@@ -8,6 +8,13 @@ import (
 	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
 
+type App struct {
+	LogLevel slog.Level
+	Kafka    *Kafka
+	AWS      *AWS
+	Db       *Db
+}
+
 type Kafka struct {
 	Broker      string
 	InitTopic   string
@@ -22,23 +29,28 @@ type AWS struct {
 	BucketName   string
 }
 
-type App struct {
-	LogLevel slog.Level
-	Kafka    *Kafka
-	AWS      *AWS
+type Db struct {
+	Uri              string
+	Name             string
+	URLCollection    string
+	DomainCollection string
 }
 
 func ParseEnv() (*App, error) {
 	envVars, err := sharedconfig.LoadEnvVars([]string{
 		"LOG_LEVEL",
 		"KAFKA_BROKER",
-		"KAFKA_INIT_TOPIC",
+		"KAFKA_URL_TOPIC",
 		"KAFKA_DLQ_TOPIC",
 		"KAFKA_PARSER_TOPIC",
 		"KAFKA_PARTITIONS",
 		"KAFKA_GROUP_ID",
 		"BUCKET_NAME",
 		"BUCKET_PREFIX",
+		"DB_URI",
+		"DB_NAME",
+		"DB_URL_COLLECTION",
+		"DB_DOMAIN_COLLECTION",
 	})
 	if err != nil {
 		return nil, err
@@ -58,7 +70,7 @@ func ParseEnv() (*App, error) {
 		LogLevel: logLevel,
 		Kafka: &Kafka{
 			Broker:      envVars["KAFKA_BROKER"],
-			InitTopic:   envVars["KAFKA_INIT_TOPIC"],
+			InitTopic:   envVars["KAFKA_URL_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 			Partitions:  partitions,
@@ -67,6 +79,12 @@ func ParseEnv() (*App, error) {
 		AWS: &AWS{
 			BucketName:   envVars["BUCKET_NAME"],
 			BucketPrefix: envVars["BUCKET_PREFIX"],
+		},
+		Db: &Db{
+			Uri:              envVars["DB_URI"],
+			Name:             envVars["DB_NAME"],
+			URLCollection:    envVars["DB_URL_COLLECTION"],
+			DomainCollection: envVars["DB_DOMAIN_COLLECTION"],
 		},
 	}, nil
 }
