@@ -41,6 +41,10 @@ func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte)
 	contentType := "text/html"
 	key := s.htmlPrefix + "/" + messageID
 
+	// TODO: hash url and use as key instead of msgID and remove messageID
+	// hash := sha256.Sum256([]byte(pageURL))
+	// key := s.htmlPrefix + "/" + hex.EncodeToString(hash[:])
+
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
 		Key:         &key,

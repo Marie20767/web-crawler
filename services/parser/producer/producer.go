@@ -47,7 +47,7 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context, urls []string) error {
 		for _, u := range chunk {
 			parsed, err := url.Parse(u)
 			if err != nil {
-				slog.Error("parse URL", slog.String("URL", u))
+				slog.Error("parse URL", slog.String("URL", u), slog.Any("error", err))
 				continue
 			}
 
