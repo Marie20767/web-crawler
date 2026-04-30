@@ -2,12 +2,10 @@ package producer
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/url"
 	"slices"
 
-	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
 	"github.com/marie20767/web-crawler/services/parser/config"

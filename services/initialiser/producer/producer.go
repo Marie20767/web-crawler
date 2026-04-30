@@ -37,8 +37,7 @@ var seedURLs = []string{
 
 type Producer struct {
 	*sharedproducer.Producer
-	topic  string
-	broker string
+	topic string
 }
 
 func New(broker, topic string) (*Producer, error) {
@@ -49,7 +48,6 @@ func New(broker, topic string) (*Producer, error) {
 
 	return &Producer{
 		Producer: prod,
-		broker:   broker,
 		topic:    topic,
 	}, nil
 }
@@ -58,7 +56,7 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context) error {
 	for _, seed := range seedURLs {
 		parsed, err := url.Parse(seed)
 		if err != nil {
-			slog.Error("parse URL", slog.String("URL", seed))
+			slog.Error("parse URL", slog.String("URL", seed), slog.Any("error", err))
 			continue
 		}
 
