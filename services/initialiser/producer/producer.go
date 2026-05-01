@@ -61,9 +61,7 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context) error {
 		}
 
 		host := parsed.Hostname()
-		err = p.Produce(ctx, []byte(host), []byte(seed), p.topic)
-
-		if err != nil {
+		if err := p.Produce(ctx, []byte(host), []byte(seed), p.topic); err != nil {
 			return err
 		}
 	}

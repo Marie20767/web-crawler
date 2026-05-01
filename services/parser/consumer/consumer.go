@@ -127,8 +127,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return err
 	}
 
-	err = c.objStore.StoreParsedText(ctx, string(msg.Key), parsedRes.text)
-	if err != nil {
+	if err := c.objStore.StoreParsedText(ctx, string(msg.Key), parsedRes.text); err != nil {
 		return err
 	}
 
@@ -277,8 +276,7 @@ func (c *Consumer) Close() {
 	closeCtx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	err := c.db.client.Close(closeCtx)
-	if err != nil {
+	if err := c.db.client.Close(closeCtx); err != nil {
 		slog.Error("close db connection", slog.Any("error", err))
 	}
 }

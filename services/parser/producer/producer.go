@@ -58,8 +58,7 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context, urls []string) error {
 			})
 		}
 
-		err := p.ProduceBatch(ctx, msgs, p.cfg.UrlTopic)
-		if err != nil {
+		if err := p.ProduceBatch(ctx, msgs, p.cfg.UrlTopic); err != nil {
 			return err
 		}
 	}
