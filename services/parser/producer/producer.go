@@ -52,13 +52,13 @@ func (p *Producer) ProduceSeedURLs(ctx context.Context, urls []string) error {
 			}
 
 			msgs = append(msgs, kafka.Message{
-				Topic: p.cfg.UrlTopic,
+				Topic: p.cfg.URLTopic,
 				Key:   []byte(parsed.Hostname()),
 				Value: []byte(u),
 			})
 		}
 
-		if err := p.ProduceBatch(ctx, msgs, p.cfg.UrlTopic); err != nil {
+		if err := p.ProduceBatch(ctx, msgs, p.cfg.URLTopic); err != nil {
 			return err
 		}
 	}

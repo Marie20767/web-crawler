@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/marie20767/web-crawler/services/crawler/config"
 	"github.com/marie20767/web-crawler/services/crawler/producer"
@@ -27,8 +23,6 @@ const (
 	kafkaMinBatchSize = 10e3 // 10KB
 	kafkaMaxBatchSize = 10e6 // 10MB
 
-	maxContentSize = 2 * 1024 * 1024 // 2 MB
-
 	httpTimeout         = 30 * time.Second
 	minErrStatusCode    = 400
 	maxIdleConns        = 200
@@ -37,9 +31,7 @@ const (
 
 	dbTimeout = 5 * time.Second
 
-	domainTTL = 24 * time.Hour
-
-	maxCrawlDelay = 30 // in seconds
+	hostTTL = 24 * time.Hour
 )
 
 type Consumer struct {
@@ -48,12 +40,6 @@ type Consumer struct {
 	objStore   *objstorage.Store
 	producer   *producer.Producer
 	db         *db
-}
-
-type db struct {
-	client           *shareddb.Client
-	urlCollection    *mongo.Collection
-	domainCollection *mongo.Collection
 }
 
 func New(
@@ -67,7 +53,7 @@ func New(
 	for range kafkaCfg.Partitions {
 		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  []string{kafkaCfg.Broker},
-			Topic:    kafkaCfg.UrlTopic,
+			Topic:    kafkaCfg.URLTopic,
 			GroupID:  kafkaCfg.GroupID,
 			MinBytes: kafkaMinBatchSize,
 			MaxBytes: kafkaMaxBatchSize,
@@ -86,8 +72,8 @@ func New(
 
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
-	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.DomainCollection, "expireAt", domainTTL); err != nil {
-		return nil, fmt.Errorf("create domain TTL index: %v", err)
+	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "expireAt", hostTTL); err != nil {
+		return nil, fmt.Errorf("create host TTL index: %v", err)
 	}
 
 	return &Consumer{
@@ -103,9 +89,9 @@ func New(
 		objStore: objStore,
 		producer: prod,
 		db: &db{
-			client:           dbClient,
-			urlCollection:    dbClient.Collection(dbCfg.Name, dbCfg.URLCollection),
-			domainCollection: dbClient.Collection(dbCfg.Name, dbCfg.DomainCollection),
+			client:         dbClient,
+			urlCollection:  dbClient.Collection(dbCfg.Name, dbCfg.URLCollection),
+			hostCollection: dbClient.Collection(dbCfg.Name, dbCfg.HostCollection),
 		},
 	}, nil
 }
@@ -146,9 +132,9 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return nil
 	}
 
-	domain := string(msg.Key)
+	host := string(msg.Key)
 
-	isAllowed, rateLimitErr := c.handleRateLimit(ctx, pageURL, domain)
+	isAllowed, rateLimitErr := c.handleRateLimit(ctx, pageURL, parsedURL.Path, parsedURL.Scheme, host)
 	if rateLimitErr != nil {
 		return rateLimitErr
 	}
@@ -169,117 +155,11 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 		return objStoreErr
 	}
 
-	if err := c.updateURLMetadata(ctx, pageURL, storageURL, domain); err != nil {
+	if err := c.updateURLMetadata(ctx, pageURL, storageURL, host); err != nil {
 		return err
 	}
 
-	return c.producer.ProduceParser(ctx, string(msg.Key), pageURL, storageURL)
-}
-
-func (c *Consumer) alreadyCrawled(ctx context.Context, pageURL string) (bool, error) {
-	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelDbCtx()
-
-	var doc struct {
-		StorageURL string `bson:"storageUrl"`
-	}
-
-	err := c.db.urlCollection.FindOne(dbCtx, bson.M{
-		"_id": pageURL,
-	}).Decode(&doc)
-	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		return false, fmt.Errorf("fetch url from db: %v", err)
-	}
-
-	if errors.Is(err, mongo.ErrNoDocuments) || doc.StorageURL == "" {
-		return true, nil
-	}
-
-	slog.Info("skipped url: already crawled", slog.String("url", pageURL))
-	return false, nil
-}
-
-func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, domain string) (isAllowed bool, err error) {
-	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelDbCtx()
-	// TODO:
-	// 1. get path
-	// 2. query domain collection with domain filter (need crawlDelay, allowedPaths, disallowedPaths, lastCrawlTime)
-	//     - if no documents:
-	// 1. fetch robots.txt
-	// 2. update DB
-	// 3. check path is allowed
-	// 4. if path is !allowed return false, nil else return true, nil
-	//    - if domain result:
-	//           // 1. check path is allowed, if not return false, nil
-	// 2. check lastCrawlTime > now (unix timestamp) + crawlDelay:
-	//   - if yes: return true, nil
-	//   - if no:
-	//       1. sleep min(crawlDelay, maxCrawlDelay)
-	//       2. check lastCrawlTime > now (unix timestamp) + crawlDelay
-	//          - if yes: return true, nil
-	//          - if no: reproduce to url topic return false, nil
-
-	return true, nil
-}
-
-func (c *Consumer) fetchHTMLWithLimit(ctx context.Context, pageURL string) (data []byte, skipped bool, err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, http.NoBody)
-	if err != nil {
-		return nil, false, fmt.Errorf("create web page request %v", err)
-	}
-
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, false, fmt.Errorf("make web page request %v", err)
-	}
-	defer res.Body.Close() //nolint:errcheck
-	if res.StatusCode >= minErrStatusCode {
-		return nil, false, &httperr.Err{StatusCode: res.StatusCode}
-	}
-
-	if res.ContentLength > maxContentSize {
-		slog.Info("skipped large web page based on content-length header", slog.Int64("content-length", res.ContentLength))
-		return nil, true, nil
-	}
-
-	// fallback if content-length header is absent/untrustworthy
-	limited := io.LimitReader(res.Body, maxContentSize+1)
-	data, err = io.ReadAll(limited)
-	if err != nil {
-		return nil, false, fmt.Errorf("read response: %v", err)
-	}
-
-	if int64(len(data)) > maxContentSize {
-		slog.Info("skipped large web page request", slog.Int64("content-length", int64(len(data))))
-		return nil, true, nil
-	}
-
-	return data, false, nil
-}
-
-func (c *Consumer) updateURLMetadata(ctx context.Context, pageURL, storageURL, domain string) error {
-	updateURLCtx, cancelUpdateURLCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelUpdateURLCtx()
-	if _, err := c.db.urlCollection.UpdateOne(
-		updateURLCtx,
-		bson.M{"_id": pageURL},
-		bson.M{"$set": bson.M{"storageUrl": storageURL}},
-		options.Update().SetUpsert(true)); err != nil {
-		return fmt.Errorf("update URL %v", err)
-	}
-
-	updateDomainCtx, cancelUpdateDomainCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelUpdateDomainCtx()
-	if _, err := c.db.domainCollection.UpdateOne(
-		updateDomainCtx,
-		bson.M{"_id": domain},
-		bson.M{"$set": bson.M{"lastCrawlTime": time.Now().Unix()}},
-	); err != nil {
-		return fmt.Errorf("update domain %v", err)
-	}
-
-	return nil
+	return c.producer.ProduceParser(ctx, pageURL, storageURL, host)
 }
 
 func (c *Consumer) Close() {

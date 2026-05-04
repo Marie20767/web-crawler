@@ -1,22 +1,16 @@
 package consumer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"golang.org/x/net/html"
 
 	"github.com/marie20767/web-crawler/services/parser/config"
 	"github.com/marie20767/web-crawler/services/parser/producer"
@@ -137,137 +131,6 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 	}
 
 	return c.producer.ProduceSeedURLs(ctx, uniqueURLs)
-}
-
-type parsed struct {
-	text string
-	urls []string
-}
-
-func (c *Consumer) parseRawHTML(raw []byte, baseURL *url.URL) (*parsed, error) {
-	doc, err := html.Parse(bytes.NewReader(raw))
-	if err != nil {
-		return nil, fmt.Errorf("parse raw HTML %v", err)
-	}
-
-	var sb strings.Builder
-	var urls []string
-	var walk func(n *html.Node)
-	walk = func(n *html.Node) {
-		if n.Parent != nil {
-			switch n.Type {
-			case html.TextNode:
-				switch n.Parent.Data {
-				case "script", "style":
-				// skip
-				default:
-					text := strings.TrimSpace(n.Data)
-					if text != "" {
-						if sb.Len() > 0 {
-							sb.WriteByte(' ')
-						}
-						sb.WriteString(text)
-					}
-				}
-
-			case html.ElementNode:
-				if n.Data == "a" {
-					for _, attr := range n.Attr {
-						if attr.Key != "href" {
-							continue
-						}
-
-						parsedHref, hrefErr := url.Parse(attr.Val)
-
-						if hrefErr != nil || isResourceURL(parsedHref) {
-							continue
-						}
-
-						switch parsedHref.Scheme {
-						case "", "http", "https":
-						default:
-							continue
-						}
-
-						resolved := baseURL.ResolveReference(parsedHref)
-						urls = append(urls, resolved.String())
-					}
-				}
-			}
-		}
-
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walk(child)
-		}
-	}
-
-	walk(doc)
-
-	return &parsed{
-		text: sb.String(),
-		urls: urls,
-	}, nil
-}
-
-func isResourceURL(u *url.URL) bool {
-	switch strings.ToLower(path.Ext(u.Path)) {
-	case ".js", ".css", ".woff", ".woff2", ".ttf", ".eot", ".otf",
-		".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp":
-		return true
-	}
-
-	return false
-}
-
-func (c *Consumer) getUniqueURLs(ctx context.Context, parsedURLs []string) ([]string, error) {
-	if len(parsedURLs) == 0 {
-		return nil, nil
-	}
-
-	seen := make(map[string]struct{}, len(parsedURLs))
-	deduped := make([]string, 0, len(parsedURLs))
-	for _, u := range parsedURLs {
-		if _, ok := seen[u]; !ok {
-			seen[u] = struct{}{}
-			deduped = append(deduped, u)
-		}
-	}
-
-	dbCtx, cancelDbCtx := context.WithTimeout(ctx, dbTimeout)
-	defer cancelDbCtx()
-
-	models := make([]mongo.WriteModel, len(deduped))
-	now := time.Now()
-	for i, u := range deduped {
-		models[i] = mongo.NewInsertOneModel().SetDocument(bson.M{"_id": u, "queuedAt": now})
-	}
-
-	_, err := c.db.collection.BulkWrite(dbCtx, models, options.BulkWrite().SetOrdered(false))
-	if err == nil {
-		return deduped, nil
-	}
-
-	var bulkErr mongo.BulkWriteException
-	if !errors.As(err, &bulkErr) {
-		return nil, fmt.Errorf("bulk insert URLs: %v", err)
-	}
-
-	alreadySeen := make(map[string]struct{}, len(bulkErr.WriteErrors))
-	for _, we := range bulkErr.WriteErrors {
-		if we.Code != mongoDuplicateKeyErr {
-			return nil, fmt.Errorf("insert URL into db: %v", we.Message)
-		}
-		alreadySeen[deduped[we.Index]] = struct{}{}
-	}
-
-	unique := make([]string, 0, len(deduped)-len(alreadySeen))
-	for _, u := range deduped {
-		if _, isDuplicate := alreadySeen[u]; !isDuplicate {
-			unique = append(unique, u)
-		}
-	}
-
-	return unique, nil
 }
 
 func (c *Consumer) Close() {
