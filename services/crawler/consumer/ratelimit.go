@@ -23,29 +23,13 @@ func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, path, scheme, h
 
 	readCtx, cancelReadCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelReadCtx()
-
-	err = c.db.hostCollection.FindOne(readCtx, bson.M{"_id": host}).Decode(&hostRecord)
-	if err != nil {
+	if err = c.db.hostCollection.FindOne(readCtx, bson.M{"_id": host}).Decode(&hostRecord); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			robotsData, err := c.fetchRobots(ctx, scheme, host)
-			switch {
-			case err != nil:
+			if err := c.handleNewRobots(ctx, &hostRecord, scheme, host); err != nil {
 				return false, err
-			case robotsData == nil:
-				hostRecord.robots = robots{
-					CrawlDelay:      defaultCrawlDelay,
-					AllowedPaths:    []string{"*"},
-					DisallowedPaths: nil,
-				}
-			default:
-				hostRecord.robots = parseRobots(robotsData)
 			}
-
-			writeCtx, cancelWriteCtx := context.WithTimeout(ctx, dbTimeout)
-			defer cancelWriteCtx()
-			c.db.hostCollection.InsertOne(writeCtx, hostRecord.robots)
 		} else {
-			return false, fmt.Errorf("find host %v", err)
+			return false, fmt.Errorf("find host in db %v", err)
 		}
 	}
 
@@ -61,8 +45,7 @@ func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, path, scheme, h
 	slog.Info("rate limited", slog.Time("last crawled", hostRecord.LastCrawlTime), slog.Duration("delay", hostRecord.CrawlDelay))
 
 	const maxCrawlDelay = 30 * time.Second
-	sleepDuration := time.Duration(min(hostRecord.CrawlDelay, maxCrawlDelay))
-	time.Sleep(sleepDuration)
+	time.Sleep(min(hostRecord.CrawlDelay, maxCrawlDelay))
 
 	if time.Since(hostRecord.LastCrawlTime) >= hostRecord.CrawlDelay {
 		return true, nil
@@ -76,4 +59,29 @@ func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, path, scheme, h
 	}
 
 	return false, nil
+}
+
+func (c *Consumer) handleNewRobots(ctx context.Context, hostRecord *hostRecord, scheme, host string) error {
+	robotsData, err := c.fetchRobots(ctx, scheme, host)
+	switch {
+	case err != nil:
+		return err
+	case robotsData == nil:
+		hostRecord.robots = robots{
+			CrawlDelay:      defaultCrawlDelay,
+			AllowedPaths:    []string{"*"},
+			DisallowedPaths: nil,
+		}
+	default:
+		hostRecord.robots = parseRobots(robotsData)
+	}
+
+	writeCtx, cancelWriteCtx := context.WithTimeout(ctx, dbTimeout)
+	defer cancelWriteCtx()
+	_, err = c.db.hostCollection.InsertOne(writeCtx, hostRecord.robots)
+	if err != nil {
+		return fmt.Errorf("add new host to db %v", err)
+	}
+
+	return nil
 }
