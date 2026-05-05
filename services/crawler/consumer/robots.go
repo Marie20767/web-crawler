@@ -16,9 +16,9 @@ import (
 )
 
 type robots struct {
-	CrawlDelay      time.Duration `json:"crawlDelay"`
-	AllowedPaths    []string      `json:"allowedPaths"`
-	DisallowedPaths []string      `json:"disallowedPaths"`
+	CrawlDelay      string   `bson:"crawlDelay"`
+	AllowedPaths    []string `bson:"allowedPaths"`
+	DisallowedPaths []string `bson:"disallowedPaths"`
 }
 
 func (c *Consumer) fetchRobots(ctx context.Context, scheme, host string) (data []byte, err error) {
@@ -116,10 +116,6 @@ func parseRobots(robotsData []byte) robots {
 		}
 	}
 
-	if allowed == nil {
-		allowed = []string{"*"}
-	}
-
 	crawlDelay := globalDelay
 	if groupDelay != 0 {
 		crawlDelay = groupDelay
@@ -128,7 +124,7 @@ func parseRobots(robotsData []byte) robots {
 	return robots{
 		AllowedPaths:    allowed,
 		DisallowedPaths: disallowed,
-		CrawlDelay:      crawlDelay,
+		CrawlDelay:      crawlDelay.String(),
 	}
 }
 
@@ -137,23 +133,23 @@ func isPathAllowed(path string, allowedPaths, disallowedPaths []string) bool {
 	isAllowed := true
 
 	for _, disallowed := range disallowedPaths {
-		if disallowed == "/" || disallowed == "*" {
+		if disallowed == "*" {
 			isAllowed = false
 			break
 		}
 
-		if strings.HasPrefix(disallowed, path) && len(disallowed) > longestMatch {
+		if strings.HasPrefix(path, disallowed) && len(disallowed) > longestMatch {
 			longestMatch = len(disallowed)
 			isAllowed = false
 		}
 	}
 
 	for _, allowed := range allowedPaths {
-		if allowed == "/" || allowed == "*" {
+		if allowed == "*" {
 			return true
 		}
 
-		if strings.HasPrefix(allowed, path) && len(allowed) >= longestMatch {
+		if strings.HasPrefix(path, allowed) && len(allowed) >= longestMatch {
 			longestMatch = len(allowed)
 			isAllowed = true
 		}
