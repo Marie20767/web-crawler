@@ -82,15 +82,17 @@ func (c *Consumer) handleNewRobots(ctx context.Context, hostRecord *hostRecord, 
 	}
 
 	type hostDoc struct {
-		ID     string `bson:"_id"`
-		Robots robots `bson:"robots"`
+		ID        string    `bson:"_id"`
+		CreatedAt time.Time `bson:"createdAt"`
+		Robots    robots    `bson:"robots"`
 	}
 
 	writeCtx, cancelWriteCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelWriteCtx()
 	_, err = c.db.hostCollection.InsertOne(writeCtx, hostDoc{
-		ID:     host,
-		Robots: hostRecord.Robots,
+		ID:        host,
+		CreatedAt: time.Now(),
+		Robots:    hostRecord.Robots,
 	})
 	if err != nil {
 		return fmt.Errorf("add new host to db %v", err)

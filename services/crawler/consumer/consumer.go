@@ -72,7 +72,7 @@ func New(
 
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
-	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "expireAt", hostTTL); err != nil {
+	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "createdAt", hostTTL); err != nil {
 		return nil, fmt.Errorf("create host TTL index: %v", err)
 	}
 
