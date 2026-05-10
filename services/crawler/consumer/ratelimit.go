@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,14 +19,14 @@ type hostRecord struct {
 	LastCrawlTime time.Time `bson:"lastCrawlTime"`
 }
 
-func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, path, scheme, host string) (isAllowed bool, err error) {
+func (c *Consumer) handleRateLimit(ctx context.Context, pageURL string, parsedURL *url.URL, host string) (isAllowed bool, err error) {
 	var hostRecord hostRecord
 
 	readCtx, cancelReadCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelReadCtx()
 	if err = c.db.hostCollection.FindOne(readCtx, bson.M{"_id": host}).Decode(&hostRecord); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			if err := c.handleNewRobots(ctx, &hostRecord, scheme, host); err != nil {
+			if err := c.handleNewRobots(ctx, &hostRecord, parsedURL.Scheme, host); err != nil {
 				return false, err
 			}
 		} else {
@@ -33,7 +34,7 @@ func (c *Consumer) handleRateLimit(ctx context.Context, pageURL, path, scheme, h
 		}
 	}
 
-	if !isPathAllowed(path, hostRecord.Robots.AllowedPaths, hostRecord.Robots.DisallowedPaths) {
+	if !isPathAllowed(parsedURL.Path, hostRecord.Robots.AllowedPaths, hostRecord.Robots.DisallowedPaths) {
 		slog.Warn("path not allowed", slog.String("URL", pageURL))
 		return false, nil
 	}
@@ -89,12 +90,11 @@ func (c *Consumer) handleNewRobots(ctx context.Context, hostRecord *hostRecord, 
 
 	writeCtx, cancelWriteCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelWriteCtx()
-	_, err = c.db.hostCollection.InsertOne(writeCtx, hostDoc{
+	if _, err = c.db.hostCollection.InsertOne(writeCtx, hostDoc{
 		ID:        host,
 		CreatedAt: time.Now(),
 		Robots:    hostRecord.Robots,
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("add new host to db %v", err)
 	}
 

@@ -73,7 +73,7 @@ func New(
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
 	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "createdAt", hostTTL); err != nil {
-		return nil, fmt.Errorf("create host TTL index: %v", err)
+		return nil, fmt.Errorf("create createdAt TTL (host) index: %v", err)
 	}
 
 	return &Consumer{
@@ -134,7 +134,7 @@ func (c *Consumer) processMessage(ctx context.Context, msg *kafka.Message) error
 
 	host := string(msg.Key)
 
-	isAllowed, rateLimitErr := c.handleRateLimit(ctx, pageURL, parsedURL.Path, parsedURL.Scheme, host)
+	isAllowed, rateLimitErr := c.handleRateLimit(ctx, pageURL, parsedURL, host)
 	if rateLimitErr != nil {
 		return rateLimitErr
 	}

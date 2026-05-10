@@ -69,7 +69,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
 	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.Collection, "queuedAt", urlTTL); err != nil {
-		return nil, fmt.Errorf("create url TTL index: %v", err)
+		return nil, fmt.Errorf("create queuedAt TTL (URL) index: %v", err)
 	}
 
 	return &Consumer{

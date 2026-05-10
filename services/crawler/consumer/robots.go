@@ -93,9 +93,10 @@ func parseRobots(robotsData []byte) robots {
 				groupDone = true
 				val = stripComment(val)
 				if val != "" {
-					if key == "allow" {
+					switch key {
+					case "allow":
 						allowed = append(allowed, val)
-					} else {
+					case "disallow":
 						disallowed = append(disallowed, val)
 					}
 				}
