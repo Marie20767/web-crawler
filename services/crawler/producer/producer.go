@@ -39,15 +39,18 @@ func (p *Producer) ProduceDLQ(ctx context.Context, msg *kafka.Message, errCode i
 	_ = p.Produce(ctx, msg.Key, msg.Value, p.cfg.DLQTopic)
 }
 
-func (p *Producer) ProduceParser(ctx context.Context, messageID, pageURL, storageURL string) error {
+func (p *Producer) ProduceParser(ctx context.Context, pageURL, storageURL, host string) error {
 	payload, err := json.Marshal(message.ParserMessage{
 		PageURL:    pageURL,
 		StorageURL: storageURL,
 	})
 	if err != nil {
-		slog.Error("marshal parser message", slog.Any("error", err))
 		return fmt.Errorf("marshal parser message %v", err)
 	}
 
-	return p.Produce(ctx, []byte(messageID), payload, p.cfg.ParserTopic)
+	return p.Produce(ctx, []byte(host), payload, p.cfg.ParserTopic)
+}
+
+func (p *Producer) ReproduceURL(ctx context.Context, pageURL, host string) error {
+	return p.Produce(ctx, []byte(host), []byte(pageURL), p.cfg.URLTopic)
 }

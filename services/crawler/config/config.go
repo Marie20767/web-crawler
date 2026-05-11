@@ -17,7 +17,7 @@ type App struct {
 
 type Kafka struct {
 	Broker      string
-	InitTopic   string
+	URLTopic    string
 	DLQTopic    string
 	ParserTopic string
 	Partitions  int
@@ -30,10 +30,10 @@ type AWS struct {
 }
 
 type Db struct {
-	Uri              string
-	Name             string
-	URLCollection    string
-	DomainCollection string
+	Uri            string
+	Name           string
+	URLCollection  string
+	HostCollection string
 }
 
 func ParseEnv() (*App, error) {
@@ -50,7 +50,7 @@ func ParseEnv() (*App, error) {
 		"DB_URI",
 		"DB_NAME",
 		"DB_URL_COLLECTION",
-		"DB_DOMAIN_COLLECTION",
+		"DB_HOST_COLLECTION",
 	})
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func ParseEnv() (*App, error) {
 		LogLevel: logLevel,
 		Kafka: &Kafka{
 			Broker:      envVars["KAFKA_BROKER"],
-			InitTopic:   envVars["KAFKA_URL_TOPIC"],
+			URLTopic:    envVars["KAFKA_URL_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
 			Partitions:  partitions,
@@ -81,10 +81,10 @@ func ParseEnv() (*App, error) {
 			BucketPrefix: envVars["BUCKET_PREFIX"],
 		},
 		Db: &Db{
-			Uri:              envVars["DB_URI"],
-			Name:             envVars["DB_NAME"],
-			URLCollection:    envVars["DB_URL_COLLECTION"],
-			DomainCollection: envVars["DB_DOMAIN_COLLECTION"],
+			Uri:            envVars["DB_URI"],
+			Name:           envVars["DB_NAME"],
+			URLCollection:  envVars["DB_URL_COLLECTION"],
+			HostCollection: envVars["DB_HOST_COLLECTION"],
 		},
 	}, nil
 }

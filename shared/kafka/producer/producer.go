@@ -41,7 +41,6 @@ func (p *Producer) Produce(ctx context.Context, key, value []byte, topic string)
 	}
 
 	if err := p.writer.WriteMessages(writeCtx, msg); err != nil {
-		slog.Error("produce message", slog.String("topic", topic), slog.Any("error", err))
 		return fmt.Errorf("produce message to topic %s %v", topic, err)
 	}
 
@@ -54,7 +53,6 @@ func (p *Producer) ProduceBatch(ctx context.Context, msgs []kafka.Message, topic
 	defer cancelCtx()
 
 	if err := p.writer.WriteMessages(writeCtx, msgs...); err != nil {
-		slog.Error("produce messages", slog.String("topic", topic), slog.Any("error", err))
 		return fmt.Errorf("produce messages to topic %s %v", topic, err)
 	}
 

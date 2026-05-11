@@ -3,6 +3,8 @@ package objstorage
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,9 +39,9 @@ func New(ctx context.Context, bucketName, htmlPrefix, textPrefix string) (*Store
 	}, nil
 }
 
-func (s *Store) StoreRawHTML(ctx context.Context, messageID string, html []byte) (string, error) {
+func (s *Store) StoreRawHTML(ctx context.Context, pageURL string, html []byte) (string, error) {
 	contentType := "text/html"
-	key := s.htmlPrefix + "/" + messageID
+	key := s.hashKey(pageURL, s.htmlPrefix)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
@@ -83,9 +85,9 @@ func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
 	return bucket, key
 }
 
-func (s *Store) StoreParsedText(ctx context.Context, messageID, text string) error {
+func (s *Store) StoreParsedText(ctx context.Context, pageURL, text string) error {
 	contentType := "text/plain"
-	key := s.textPrefix + "/" + messageID
+	key := s.hashKey(pageURL, s.textPrefix)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
@@ -98,4 +100,9 @@ func (s *Store) StoreParsedText(ctx context.Context, messageID, text string) err
 
 	slog.Info("successfully uploaded parsed text to object store")
 	return nil
+}
+
+func (s *Store) hashKey(pageURL, bucketPrefix string) string {
+	hash := sha256.Sum256([]byte(pageURL))
+	return bucketPrefix + "/" + hex.EncodeToString(hash[:])
 }
