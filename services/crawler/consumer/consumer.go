@@ -31,7 +31,7 @@ const (
 
 	dbTimeout = 5 * time.Second
 
-	hostTTL = 24 * time.Hour
+	createdAtTTL = 24 * time.Hour
 )
 
 type Consumer struct {
@@ -72,7 +72,7 @@ func New(
 
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
-	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "createdAt", hostTTL); err != nil {
+	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.HostCollection, "createdAt", createdAtTTL); err != nil {
 		return nil, fmt.Errorf("create createdAt TTL (host) index: %v", err)
 	}
 

@@ -29,7 +29,7 @@ const (
 
 	mongoDuplicateKeyErr = 11000
 
-	urlTTL = 14 * 24 * time.Hour
+	queuedAtTTL = 14 * 24 * time.Hour
 )
 
 type Consumer struct {
@@ -68,7 +68,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 
 	idxCtx, cancelIdxCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelIdxCtx()
-	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.Collection, "queuedAt", urlTTL); err != nil {
+	if err := dbClient.CreateTTLIndex(idxCtx, dbCfg.Name, dbCfg.Collection, "queuedAt", queuedAtTTL); err != nil {
 		return nil, fmt.Errorf("create queuedAt TTL (URL) index: %v", err)
 	}
 
