@@ -41,7 +41,7 @@ func New(ctx context.Context, bucketName, htmlPrefix, textPrefix string) (*Store
 
 func (s *Store) StoreRawHTML(ctx context.Context, pageURL string, html []byte) (string, error) {
 	contentType := "text/html"
-	key := s.hashKey(pageURL)
+	key := s.hashKey(pageURL, s.htmlPrefix)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
@@ -87,7 +87,7 @@ func (s *Store) getBucketAndKey(objStoreURL string) (bucket, key string) {
 
 func (s *Store) StoreParsedText(ctx context.Context, pageURL, text string) error {
 	contentType := "text/plain"
-	key := s.hashKey(pageURL)
+	key := s.hashKey(pageURL, s.textPrefix)
 
 	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      &s.bucketName,
@@ -102,7 +102,7 @@ func (s *Store) StoreParsedText(ctx context.Context, pageURL, text string) error
 	return nil
 }
 
-func (s *Store) hashKey(pageURL string) string {
+func (s *Store) hashKey(pageURL, bucketPrefix string) string {
 	hash := sha256.Sum256([]byte(pageURL))
-	return s.htmlPrefix + "/" + hex.EncodeToString(hash[:])
+	return bucketPrefix + "/" + hex.EncodeToString(hash[:])
 }
