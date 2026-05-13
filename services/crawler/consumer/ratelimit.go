@@ -24,7 +24,7 @@ func (c *Consumer) handleRateLimit(ctx context.Context, pageURL string, parsedUR
 
 	readCtx, cancelReadCtx := context.WithTimeout(ctx, dbTimeout)
 	defer cancelReadCtx()
-	if err = c.db.hostCollection.FindOne(readCtx, bson.M{"_id": host}).Decode(&hostRecord); err != nil {
+	if err = c.db.hostCollection.FindOne(readCtx, bson.M{"_id": host}).Decode(&hostRecord); err != nil { //nolint:goconst
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			if err := c.handleNewRobots(ctx, &hostRecord, parsedURL.Scheme, host); err != nil {
 				return false, err

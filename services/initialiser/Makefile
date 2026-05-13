@@ -3,16 +3,13 @@ DOCKER_USER := marie20767
 IMAGE_NAME := url-initialiser
 PROJECT_ROOT := $(shell git rev-parse --show-toplevel)/
 
-dep:
-	go mod download
-
 run:
 	go run main.go
 
 lint: lint/install lint/run
 
 lint/install:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v2.5.0
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- v2.12.2
 
 lint/run:
 	bin/golangci-lint run --config $(PROJECT_ROOT).golangci.yml

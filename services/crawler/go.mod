@@ -1,6 +1,6 @@
 module github.com/marie20767/web-crawler/services/crawler
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/marie20767/web-crawler/shared v0.0.0-00010101000000-000000000000
