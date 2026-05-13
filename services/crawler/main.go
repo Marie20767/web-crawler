@@ -17,8 +17,6 @@ func main() {
 		slog.Error("crawler run", slog.Any("error", err))
 		os.Exit(1)
 	}
-
-	slog.Info("shutting down crawler gracefully...")
 }
 
 func run() error {

@@ -15,8 +15,6 @@ func main() {
 		slog.Error("parser run", slog.Any("error", err))
 		os.Exit(1)
 	}
-
-	slog.Info("shutting down parser...")
 }
 
 func run() error {

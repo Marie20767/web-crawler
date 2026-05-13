@@ -14,8 +14,6 @@ func main() {
 		slog.Error("initialiser run", slog.Any("error", err))
 		os.Exit(1)
 	}
-
-	slog.Info("shutting down initialiser...")
 }
 
 func run() error {
