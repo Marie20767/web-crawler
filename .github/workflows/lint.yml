@@ -27,7 +27,7 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.12.2
           args: --timeout 5m
           working-directory: services/${{ matrix.service }}
 
@@ -48,6 +48,6 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.12.2
           args: --timeout 5m
           working-directory: shared
