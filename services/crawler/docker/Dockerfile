@@ -1,14 +1,14 @@
 # =========================
 # Stage 1: Build the binary
 # =========================
-FROM golang:1.25 AS builder
+FROM golang:1.26 AS builder
 
 WORKDIR /app
 
 COPY shared/ /shared/
 
 COPY services/crawler/go.mod services/crawler/go.sum services/crawler/Makefile ./
-RUN make dep
+RUN go mod download
 
 COPY services/crawler/ .
 

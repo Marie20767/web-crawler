@@ -29,7 +29,7 @@ func (c *Consumer) alreadyCrawled(ctx context.Context, pageURL string) (bool, er
 	}
 
 	err := c.db.urlCollection.FindOne(dbCtx, bson.M{
-		"_id": pageURL,
+		"_id": pageURL, //nolint:goconst
 	}).Decode(&doc)
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return false, fmt.Errorf("fetch url from db: %v", err)
