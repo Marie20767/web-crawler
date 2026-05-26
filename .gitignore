@@ -19,3 +19,6 @@ REFLECTION_NEEDED.md
 
 # Excalidraw (diagram tool)
 webcrawler.excalidraw
+
+# K8s
+secret.yml

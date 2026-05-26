@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-crawler
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: url-crawler
+  template:
+    metadata:
+      labels:
+        app: url-crawler
+    spec:
+      containers:
+        - name: url-crawler
+          image: url-crawler:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: url-crawler-config
+            - secretRef:
+                name: url-crawler-secrets
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: aws-credentials
+              mountPath: /home/crawler/.aws
+              readOnly: true
+      volumes:
+        - name: aws-credentials
+          hostPath:
+            path: ~/.aws:/home/crawler/.aws
+            type: Directory

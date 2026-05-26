@@ -1,6 +1,6 @@
 ## Distributed Web Crawler
 
-A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3, and URL metadata in MongoDB.
+A distributed web crawler built with 3 Go microservices communicating via Kafka, storing crawled raw HTML and parsed text in AWS S3, and URL metadata in MongoDB. Experimenting with horizontal scaling on Kubernetes via Minikube, and distributed tracing via OpenTelemetry.
 
 ### Stack
 
@@ -9,6 +9,8 @@ A distributed web crawler built with 3 Go microservices communicating via Kafka,
 - AWS S3 (via Terraform)
 - Docker
 - MongoDB
+- Kubernetes (Minikube)
+- OpenTelemetry
 
 ### Architecture
 
@@ -89,6 +91,28 @@ From `services/initialiser` | `services/crawler` | `services/parser` | `shared/`
 ```bash
 make lint        # install + run
 make lint/fix    # auto-fix
+```
+
+#### Run Kubernetes with Minikube
+
+1. Start Minikube with Docker:
+```bash
+make k8-start --nodes=num_nodes
+```
+
+2. Point Docker at Minikube's daemon and build image:
+```bash
+make k8-build
+```
+
+3. Apply manifests:
+```bash
+make k8-apply
+```
+
+4. Stop pods:
+```bash
+make k8-stop
 ```
 
 #### Build (Linux x86_64 binary)

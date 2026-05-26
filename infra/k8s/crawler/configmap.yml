@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: url-crawler-config
+data:
+  LOG_LEVEL: debug
+  # Kafka 
+  KAFKA_BROKER: kafka:9092
+  KAFKA_URL_TOPIC: url
+  KAFKA_DLQ_TOPIC: crawler-dlq
+  KAFKA_PARSER_TOPIC: parser
+  KAFKA_GROUP_ID: crawler
+  # AWS
+  AWS_PROFILE: terraform
+  BUCKET_NAME: my-web-crawler-data-dev
+  BUCKET_PREFIX: raw-html
+  # DB
+  DB_NAME: web-crawler
+  DB_URL_COLLECTION: url
+  DB_HOST_COLLECTION: host
