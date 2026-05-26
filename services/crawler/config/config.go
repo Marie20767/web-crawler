@@ -1,9 +1,7 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
-	"strconv"
 
 	sharedconfig "github.com/marie20767/web-crawler/shared/config"
 )
@@ -20,7 +18,6 @@ type Kafka struct {
 	URLTopic    string
 	DLQTopic    string
 	ParserTopic string
-	Partitions  int
 	GroupID     string
 }
 
@@ -43,7 +40,6 @@ func ParseEnv() (*App, error) {
 		"KAFKA_URL_TOPIC",
 		"KAFKA_DLQ_TOPIC",
 		"KAFKA_PARSER_TOPIC",
-		"KAFKA_PARTITIONS",
 		"KAFKA_GROUP_ID",
 		"BUCKET_NAME",
 		"BUCKET_PREFIX",
@@ -61,11 +57,6 @@ func ParseEnv() (*App, error) {
 		return nil, err
 	}
 
-	partitions, err := strconv.Atoi(envVars["KAFKA_PARTITIONS"])
-	if err != nil {
-		return nil, fmt.Errorf("converting kafka partitions %v", err)
-	}
-
 	return &App{
 		LogLevel: logLevel,
 		Kafka: &Kafka{
@@ -73,7 +64,6 @@ func ParseEnv() (*App, error) {
 			URLTopic:    envVars["KAFKA_URL_TOPIC"],
 			DLQTopic:    envVars["KAFKA_DLQ_TOPIC"],
 			ParserTopic: envVars["KAFKA_PARSER_TOPIC"],
-			Partitions:  partitions,
 			GroupID:     envVars["KAFKA_GROUP_ID"],
 		},
 		AWS: &AWS{
