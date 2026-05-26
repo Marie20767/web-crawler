@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -21,20 +20,15 @@ const (
 type messageHandler func(ctx context.Context, msg *kafka.Message) error
 
 type Consumer struct {
-	readers []*kafka.Reader
-}
-
-type job struct {
 	reader *kafka.Reader
-	msg    kafka.Message
 }
 
-func New(readers []*kafka.Reader) *Consumer {
-	return &Consumer{readers: readers}
+func New(reader *kafka.Reader) *Consumer {
+	return &Consumer{reader: reader}
 }
 
 func (c *Consumer) Consume(ctx context.Context, handler messageHandler) error {
-	jobs := make(chan job, bufferSize)
+	jobs := make(chan kafka.Message, bufferSize)
 	var wg sync.WaitGroup
 
 	for range workerCount {
@@ -46,20 +40,13 @@ func (c *Consumer) Consume(ctx context.Context, handler messageHandler) error {
 	defer wg.Wait()
 	defer close(jobs)
 
-	errGrp, errGrpCtx := errgroup.WithContext(ctx)
-	for _, reader := range c.readers {
-		errGrp.Go(func() error {
-			return c.fetchMessages(errGrpCtx, reader, jobs)
-		})
-	}
-
-	return errGrp.Wait()
+	return c.fetchMessages(ctx, jobs)
 }
 
-func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs chan<- job) error {
+func (c *Consumer) fetchMessages(ctx context.Context, jobs chan<- kafka.Message) error {
 	for {
 		readCtx, cancel := context.WithTimeout(ctx, kafkaTimeout)
-		msg, err := reader.FetchMessage(readCtx)
+		msg, err := c.reader.FetchMessage(readCtx)
 		cancel()
 
 		if err != nil {
@@ -87,7 +74,7 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 		}
 
 		select {
-		case jobs <- job{reader: reader, msg: msg}:
+		case jobs <- msg:
 		case <-ctx.Done():
 			slog.Warn("context cancelled, dropping unqueued message", slog.String("url", string(msg.Key)))
 			return nil
@@ -95,25 +82,23 @@ func (c *Consumer) fetchMessages(ctx context.Context, reader *kafka.Reader, jobs
 	}
 }
 
-func (c *Consumer) processMessages(ctx context.Context, jobs <-chan job, handler messageHandler) {
+func (c *Consumer) processMessages(ctx context.Context, jobs <-chan kafka.Message, handler messageHandler) {
 	ctxNoCancel := context.WithoutCancel(ctx)
 
 	for j := range jobs {
-		slog.Info("processing message", slog.String("id", string(j.msg.Key)))
-		if err := handler(ctxNoCancel, &j.msg); err != nil {
+		slog.Info("processing message", slog.String("id", string(j.Key)))
+		if err := handler(ctxNoCancel, &j); err != nil {
 			slog.Error("process message", slog.Any("error", err))
 		}
 
-		if err := j.reader.CommitMessages(ctxNoCancel, j.msg); err != nil {
+		if err := c.reader.CommitMessages(ctxNoCancel, j); err != nil {
 			slog.Error("commit message offset", slog.Any("error", err))
 		}
 	}
 }
 
 func (c *Consumer) Close() {
-	for _, reader := range c.readers {
-		if err := reader.Close(); err != nil {
-			slog.Error("close consumer", slog.Any("error", err))
-		}
+	if err := c.reader.Close(); err != nil {
+		slog.Error("close consumer", slog.Any("error", err))
 	}
 }

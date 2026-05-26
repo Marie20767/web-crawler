@@ -45,16 +45,13 @@ type db struct {
 }
 
 func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg *config.Db, prod *producer.Producer) (*Consumer, error) {
-	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
-	for range kafkaCfg.Partitions {
-		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
-			Brokers:  []string{kafkaCfg.Broker},
-			Topic:    kafkaCfg.ParserTopic,
-			GroupID:  kafkaCfg.GroupID,
-			MinBytes: kafkaMinBatchSize,
-			MaxBytes: kafkaMaxBatchSize,
-		}))
-	}
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:  []string{kafkaCfg.Broker},
+		Topic:    kafkaCfg.ParserTopic,
+		GroupID:  kafkaCfg.GroupID,
+		MinBytes: kafkaMinBatchSize,
+		MaxBytes: kafkaMaxBatchSize,
+	})
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.HTMLBucketPrefix, awsCfg.TextBucketPrefix)
 	if err != nil {
@@ -73,7 +70,7 @@ func New(ctx context.Context, kafkaCfg *config.Kafka, awsCfg *config.AWS, dbCfg 
 	}
 
 	return &Consumer{
-		Consumer: sharedconsumer.New(readers),
+		Consumer: sharedconsumer.New(reader),
 		objStore: objStore,
 		producer: prod,
 		db: &db{

@@ -49,16 +49,13 @@ func New(
 	dbCfg *config.Db,
 	prod *producer.Producer,
 ) (*Consumer, error) {
-	readers := make([]*kafka.Reader, 0, kafkaCfg.Partitions)
-	for range kafkaCfg.Partitions {
-		readers = append(readers, kafka.NewReader(kafka.ReaderConfig{
-			Brokers:  []string{kafkaCfg.Broker},
-			Topic:    kafkaCfg.URLTopic,
-			GroupID:  kafkaCfg.GroupID,
-			MinBytes: kafkaMinBatchSize,
-			MaxBytes: kafkaMaxBatchSize,
-		}))
-	}
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:  []string{kafkaCfg.Broker},
+		Topic:    kafkaCfg.URLTopic,
+		GroupID:  kafkaCfg.GroupID,
+		MinBytes: kafkaMinBatchSize,
+		MaxBytes: kafkaMaxBatchSize,
+	})
 
 	objStore, err := objstorage.New(ctx, awsCfg.BucketName, awsCfg.BucketPrefix, "")
 	if err != nil {
@@ -77,7 +74,7 @@ func New(
 	}
 
 	return &Consumer{
-		Consumer: sharedconsumer.New(readers),
+		Consumer: sharedconsumer.New(reader),
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 			Transport: &http.Transport{
