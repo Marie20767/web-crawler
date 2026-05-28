@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-parser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: url-parser
+  template:
+    metadata:
+      labels:
+        app: url-parser
+    spec:
+      containers:
+        - name: url-parser
+          image: url-parser:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: url-parser-config
+            - secretRef:
+                name: url-parser-secrets
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: aws-credentials
+              mountPath: /home/parser/.aws
+              readOnly: true
+      volumes:
+        - name: aws-credentials
+          hostPath:
+            path: ~/.aws:/home/parser/.aws
+            type: Directory

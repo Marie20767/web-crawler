@@ -97,22 +97,22 @@ make lint/fix    # auto-fix
 
 1. Start Minikube with Docker:
 ```bash
-make k8-start --nodes=num_nodes
+make k8/start nodes=num_nodes
 ```
 
 2. Point Docker at Minikube's daemon and build image:
 ```bash
-make k8-build
+make k8/build
 ```
 
 3. Apply manifests:
 ```bash
-make k8-apply
+make k8/apply
 ```
 
 4. Stop pods:
 ```bash
-make k8-stop
+make k8/stop
 ```
 
 #### Build (Linux x86_64 binary)

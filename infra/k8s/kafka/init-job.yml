@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-init
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-kafka
+          image: apache/kafka:4.2.0
+          command: ["sh", "-c", "until /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka-0.kafka-service:9092; do echo waiting for kafka; sleep 5; done"]
+      containers:
+        - name: kafka-init
+          image: apache/kafka:4.2.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-0.kafka-service:9092 --create --topic url --partitions 1 --replication-factor 1 --if-not-exists
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-0.kafka-service:9092 --create --topic crawler-dlq --partitions 1 --replication-factor 1 --if-not-exists
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-0.kafka-service:9092 --create --topic parser --partitions 1 --replication-factor 1 --if-not-exists
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-0.kafka-service:9092 --create --topic parser-dlq --partitions 1 --replication-factor 1 --if-not-exists
