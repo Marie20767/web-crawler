@@ -13,6 +13,15 @@ spec:
       labels:
         app: kafka
     spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 1000:1000 /var/kafka/logs"]
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/kafka/logs
       containers:
         - name: kafka
           image: apache/kafka:4.2.0
