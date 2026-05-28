@@ -15,19 +15,28 @@ down:
 down/volumes:
 	docker compose down -v
 
-k8/start:
+k8s/setup:
 	minikube start --nodes=$(nodes) --driver=docker
+	minikube addons enable metrics-server
+	$(MAKE) k8s/build
+	$(MAKE) k8s/load
+	$(MAKE) k8s/apply
 
-k8/build:
+k8s/build:
 	docker build -t url-crawler:latest -f services/crawler/docker/Dockerfile .
 	docker build -t url-parser:latest -f services/parser/docker/Dockerfile .
 	docker build -t url-initialiser:latest -f services/initialiser/docker/Dockerfile .
 
-k8/apply:
+k8s/load:
+	minikube image load url-crawler:latest
+	minikube image load url-parser:latest
+	minikube image load url-initialiser:latest
+
+k8s/apply:
 	kubectl apply -f infra/k8s/ --recursive
 
-k8/stop:
+k8s/stop:
 	minikube stop
 
-k8/delete:
+k8s/delete:
 	minikube delete

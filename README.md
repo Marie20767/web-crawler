@@ -95,24 +95,19 @@ make lint/fix    # auto-fix
 
 #### Run Kubernetes with Minikube
 
-1. Start Minikube with Docker:
+1. Start Minikube with Docker and deploy everything:
 ```bash
-make k8/start nodes=num_nodes
+make k8s/setup nodes=num_nodes
 ```
 
-2. Point Docker at Minikube's daemon and build image:
+2. Stop cluster:
 ```bash
-make k8/build
+make k8s/stop
 ```
 
-3. Apply manifests:
+3. Delete cluster:
 ```bash
-make k8/apply
-```
-
-4. Stop pods:
-```bash
-make k8/stop
+make k8s/delete
 ```
 
 #### Build (Linux x86_64 binary)

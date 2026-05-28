@@ -40,5 +40,5 @@ spec:
       volumes:
         - name: aws-credentials
           hostPath:
-            path: ~/.aws:/home/parser/.aws
+            path: home/parser/.aws
             type: Directory

@@ -40,5 +40,5 @@ spec:
       volumes:
         - name: aws-credentials
           hostPath:
-            path: ~/.aws:/home/crawler/.aws
+            path: /home/crawler/.aws
             type: Directory
