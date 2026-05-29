@@ -16,7 +16,7 @@ down/volumes:
 	docker compose down -v
 
 k8s/setup:
-	minikube start --nodes=$(nodes) --driver=docker
+	minikube start --nodes=$(nodes) --cpus=${cpus} --memory=${memory} --driver=docker
 	minikube addons enable metrics-server
 	$(MAKE) k8s/build
 	$(MAKE) k8s/load
