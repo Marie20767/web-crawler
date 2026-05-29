@@ -12,6 +12,35 @@ spec:
       labels:
         app: url-crawler
     spec:
+      initContainers:
+        - name: wait-for-kafka
+          image: apache/kafka:4.2.0
+          command:
+            - sh
+            - -c
+            - |
+              until /opt/kafka/bin/kafka-broker-api-versions.sh \
+                --bootstrap-server kafka-0.kafka-service:9092; do
+                echo "waiting for kafka..."
+                sleep 5
+              done
+        - name: wait-for-db
+          image: mongo:8.0
+          command:
+            - sh
+            - -c
+            - |
+              until mongosh --host mongodb-0.mongodb-service:27017 \
+                --username $MONGO_INITDB_ROOT_USERNAME \
+                --password $MONGO_INITDB_ROOT_PASSWORD \
+                --authenticationDatabase admin \
+                --eval "db.adminCommand('ping')" --quiet; do
+                echo "waiting for mongodb..."
+                sleep 5
+              done
+          envFrom:
+            - secretRef:
+                name: mongo-secrets
       containers:
         - name: url-crawler
           image: url-crawler:latest
@@ -21,11 +50,6 @@ spec:
                 name: url-crawler-config
             - secretRef:
                 name: url-crawler-secrets
-          readinessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 10
-            periodSeconds: 5
           resources:
             requests:
               cpu: "250m"
