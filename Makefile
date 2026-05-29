@@ -33,9 +33,10 @@ k8s/load:
 	minikube image load url-initialiser:latest
 
 k8s/apply:
-	kubectl create secret generic aws-credentials \
-  --from-literal=AWS_ACCESS_KEY_ID=$(terraform output -raw web_crawler_access_key_id) \
-  --from-literal=AWS_SECRET_ACCESS_KEY=$(terraform output -raw web_crawler_secret_access_key)
+	@kubectl create secret generic aws-credentials \
+		--from-literal=AWS_ACCESS_KEY_ID=$(shell cd infra/terraform/dev/init && terraform output -raw web_crawler_access_key_id) \
+		--from-literal=AWS_SECRET_ACCESS_KEY=$(shell cd infra/terraform/dev/init && terraform output -raw web_crawler_secret_access_key) \
+		--dry-run=client -o yaml | kubectl apply -f - > /dev/null
 	kubectl apply -f infra/k8s/ --recursive
 
 k8s/stop:
