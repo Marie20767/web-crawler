@@ -13,9 +13,10 @@ spec:
             - sh
             - -c
             - |
-              until /opt/kafka/bin/kafka-broker-api-versions.sh \
-                --bootstrap-server kafka-0.kafka-service:9092; do
-                echo "waiting for kafka..."
+              until /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka-0.kafka-service:9092 \
+                --describe --topic url 2>/dev/null | grep -q "Topic: url"; do
+                echo "waiting for url topic..."
                 sleep 5
               done
       containers:
