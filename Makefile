@@ -24,15 +24,18 @@ k8s/setup:
 
 k8s/build:
 	docker build -t url-crawler:latest -f services/crawler/docker/Dockerfile .
-	docker build -t url-parser:latest -f services/parser/docker/Dockerfile .
+# 	docker build -t url-parser:latest -f services/parser/docker/Dockerfile .
 	docker build -t url-initialiser:latest -f services/initialiser/docker/Dockerfile .
 
 k8s/load:
 	minikube image load url-crawler:latest
-	minikube image load url-parser:latest
+# 	minikube image load url-parser:latest
 	minikube image load url-initialiser:latest
 
 k8s/apply:
+	kubectl create secret generic aws-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID=$(terraform output -raw web_crawler_access_key_id) \
+  --from-literal=AWS_SECRET_ACCESS_KEY=$(terraform output -raw web_crawler_secret_access_key)
 	kubectl apply -f infra/k8s/ --recursive
 
 k8s/stop:

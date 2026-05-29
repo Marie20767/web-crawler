@@ -32,7 +32,7 @@ aws configure sso --profile terraform
 
 When prompted, add the following SSO start URL: 
 ```
-https://{SSO_START_URL}.awsapps.com/start
+https://{sso_identity_store_id}.awsapps.com/start
 ```
 
 4. Delete root access key on AWS Management Console
