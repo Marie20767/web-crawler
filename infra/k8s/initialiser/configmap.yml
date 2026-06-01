@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: url-initialiser-config
+data:
+  # Server
+  LOG_LEVEL: debug
+  # Kafka
+  KAFKA_BROKER: kafka-0.kafka-service:9092
+  KAFKA_URL_TOPIC: url
+  

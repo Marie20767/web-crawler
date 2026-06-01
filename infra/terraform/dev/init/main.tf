@@ -14,7 +14,7 @@ provider "aws" {
 }
 
 # -------------------------------------------------------
-# IAM Identity Center permission set for Terraform runner
+# IAM sso user
 # -------------------------------------------------------
 
 data "aws_ssoadmin_instances" "main" {}
@@ -26,10 +26,20 @@ resource "aws_ssoadmin_permission_set" "terraform_infra" {
   session_duration = "PT4H"  # 4 hour sessions
 }
 
-resource "aws_ssoadmin_managed_policy_attachment" "terraform_s3" {
+resource "aws_ssoadmin_permission_set_inline_policy" "terraform_s3_scoped" {
   instance_arn       = tolist(data.aws_ssoadmin_instances.main.arns)[0]
   permission_set_arn = aws_ssoadmin_permission_set.terraform_infra.arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  inline_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:*"]
+      Resource = [
+        "arn:aws:s3:::my-web-crawler-data-dev",
+        "arn:aws:s3:::my-web-crawler-data-dev/*"
+      ]
+    }]
+  })
 }
 
 resource "aws_iam_policy" "terraform_iam_management" {
@@ -56,6 +66,7 @@ resource "aws_iam_policy" "terraform_iam_management" {
         Sid    = "IAMPolicyManagement"
         Effect = "Allow"
         Action = [
+          "iam:ListPolicies", 
           "iam:CreatePolicy",
           "iam:DeletePolicy",
           "iam:GetPolicy",
@@ -66,7 +77,7 @@ resource "aws_iam_policy" "terraform_iam_management" {
           "iam:SetDefaultPolicyVersion",
           "iam:ListEntitiesForPolicy"
         ]
-        Resource = "arn:aws:iam::*:policy/web_crawler_*"
+        Resource = "arn:aws:iam::${var.aws_account_id}:policy/web_crawler_*"
       },
       {
         Sid    = "IAMPolicyAttachment"
@@ -90,4 +101,48 @@ resource "aws_ssoadmin_account_assignment" "terraform_runner" {
   principal_type     = "USER"
   target_id          = var.aws_account_id
   target_type        = "AWS_ACCOUNT"
+}
+
+# -------------------------------------------------------
+# IAM user for k8s workload
+# -------------------------------------------------------
+
+resource "aws_iam_user" "web_crawler" {
+  name = "web-crawler-k8s"
+  tags = {
+    Purpose = "Web crawler k8s workload"
+  }
+}
+
+resource "aws_iam_access_key" "web_crawler" {
+  user = aws_iam_user.web_crawler.name
+}
+
+resource "aws_iam_policy" "web_crawler_s3" {
+  name        = "web_crawler_s3_access"
+  description = "Allows web crawler to put and fetch objects from s3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3PutObject"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::my-web-crawler-data-dev",
+          "arn:aws:s3:::my-web-crawler-data-dev/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "web_crawler_s3" {
+  user       = aws_iam_user.web_crawler.name
+  policy_arn = aws_iam_policy.web_crawler_s3.arn
 }

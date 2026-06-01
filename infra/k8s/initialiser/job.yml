@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: url-initialiser
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-kafka
+          image: apache/kafka:4.2.0
+          command:
+            - sh
+            - -c
+            - |
+              until /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka-0.kafka-service:9092 \
+                --describe --topic url 2>/dev/null | grep -q "Topic: url"; do
+                echo "waiting for url topic..."
+                sleep 5
+              done
+      containers:
+        - name: url-initialiser
+          image: url-initialiser:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: url-initialiser-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
