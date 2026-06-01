@@ -15,7 +15,7 @@ import (
 	"github.com/marie20767/web-crawler/shared/httperr"
 )
 
-type robots struct {
+type Robots struct {
 	CrawlDelay      string   `bson:"crawlDelay"`
 	AllowedPaths    []string `bson:"allowedPaths"`
 	DisallowedPaths []string `bson:"disallowedPaths"`
@@ -52,7 +52,7 @@ func (c *Consumer) fetchRobots(ctx context.Context, scheme, host string) (data [
 	return robotsData, nil
 }
 
-func parseRobots(robotsData []byte) robots {
+func parseRobots(robotsData []byte) Robots {
 	scanner := bufio.NewScanner(bytes.NewReader(robotsData))
 
 	const keyValLen = 2
@@ -122,7 +122,7 @@ func parseRobots(robotsData []byte) robots {
 		crawlDelay = groupDelay
 	}
 
-	return robots{
+	return Robots{
 		AllowedPaths:    allowed,
 		DisallowedPaths: disallowed,
 		CrawlDelay:      crawlDelay.String(),

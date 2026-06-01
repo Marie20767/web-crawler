@@ -16,7 +16,7 @@ import (
 const defaultCrawlDelay = 1 * time.Second
 
 type hostRecord struct {
-	Robots        robots    `bson:"robots"`
+	Robots        Robots    `bson:"robots"`
 	LastCrawlTime time.Time `bson:"lastCrawlTime"`
 }
 
@@ -74,7 +74,7 @@ func (c *Consumer) handleNewRobots(ctx context.Context, record *hostRecord, sche
 	case err != nil:
 		return err
 	case robotsData == nil:
-		record.Robots = robots{
+		record.Robots = Robots{
 			CrawlDelay:      defaultCrawlDelay.String(),
 			AllowedPaths:    nil,
 			DisallowedPaths: nil,

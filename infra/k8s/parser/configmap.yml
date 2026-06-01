@@ -7,11 +7,10 @@ data:
   # Kafka 
   KAFKA_BROKER: kafka-0.kafka-service:9092
   KAFKA_URL_TOPIC: url
-  KAFKA_DLQ_TOPIC: crawler-dlq
+  KAFKA_DLQ_TOPIC: parser-dlq
   KAFKA_PARSER_TOPIC: parser
   KAFKA_GROUP_ID: parser
   # AWS
-  AWS_PROFILE: terraform
   BUCKET_NAME: my-web-crawler-data-dev
   HTML_BUCKET_PREFIX: raw-html
   TEXT_BUCKET_PREFIX: parsed-text

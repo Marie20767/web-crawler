@@ -12,6 +12,39 @@ spec:
       labels:
         app: url-parser
     spec:
+      initContainers:
+        - name: wait-for-kafka
+          image: apache/kafka:4.2.0
+          command:
+            - sh
+            - -c
+            - |
+              for topic in url parser parser-dlq; do
+                until /opt/kafka/bin/kafka-topics.sh \
+                  --bootstrap-server kafka-0.kafka-service:9092 \
+                  --describe --topic $topic 2>/dev/null | grep -q "Topic: $topic"; do
+                  echo "waiting for $topic topic..."
+                  sleep 5
+                done
+                echo "$topic topic ready"
+              done
+        - name: wait-for-db
+          image: mongo:8.0
+          command:
+            - sh
+            - -c
+            - |
+              until mongosh --host mongodb-0.mongodb-service:27017 \
+                --username $MONGO_INITDB_ROOT_USERNAME \
+                --password $MONGO_INITDB_ROOT_PASSWORD \
+                --authenticationDatabase admin \
+                --eval "db.adminCommand('ping')" --quiet; do
+                echo "waiting for mongodb..."
+                sleep 5
+              done
+          envFrom:
+            - secretRef:
+                name: mongo-secrets
       containers:
         - name: url-parser
           image: url-parser:latest
@@ -21,11 +54,17 @@ spec:
                 name: url-parser-config
             - secretRef:
                 name: url-parser-secrets
-          readinessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 10
-            periodSeconds: 5
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_SECRET_ACCESS_KEY
           resources:
             requests:
               cpu: "250m"
@@ -33,12 +72,3 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
-          volumeMounts:
-            - name: aws-credentials
-              mountPath: /home/parser/.aws
-              readOnly: true
-      volumes:
-        - name: aws-credentials
-          hostPath:
-            path: home/parser/.aws
-            type: Directory

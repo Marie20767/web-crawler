@@ -24,12 +24,12 @@ k8s/setup:
 
 k8s/build:
 	docker build -t url-crawler:latest -f services/crawler/docker/Dockerfile .
-# 	docker build -t url-parser:latest -f services/parser/docker/Dockerfile .
+	docker build -t url-parser:latest -f services/parser/docker/Dockerfile .
 	docker build -t url-initialiser:latest -f services/initialiser/docker/Dockerfile .
 
 k8s/load:
 	minikube image load url-crawler:latest
-# 	minikube image load url-parser:latest
+	minikube image load url-parser:latest
 	minikube image load url-initialiser:latest
 
 k8s/apply:
